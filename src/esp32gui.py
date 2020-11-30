@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         if not cmd_str:
             cmd_str = self.ui.command_input.text()
 
-        if cmd_str == "cls":
+        if cmd_str == "cls": 
             self.ui.text_error_output.setText("")
             self.ui.text_output.setText("")
             self.ui.Repl.textbox.setText("")
