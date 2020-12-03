@@ -1,4 +1,4 @@
-# TNSIM requirements for pip
+# ESP32 CLI/GUI requirementsmakdist
 # # Usage: pip install -r requirements.txt
 
 cmd2
@@ -6,6 +6,9 @@ pyserial
 pylint
 ConfigArgParse
 PySide2
+
+# To create an installer / .exe
+pyinstaller
 
 # For ESP32 logic
 adafruit-ampy

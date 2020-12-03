@@ -103,7 +103,7 @@ class SerialTerminalWidget(QWidget):
 
         self.serth = SerialThread(portname, baudrate)       # Define the serial thread
 
-        self.text_update.connect(self.append_text)          # Connect text update to handler
+        self.text_update.connect(self.append_text)  # noqa  # Connect text update to handler
         self.org_stdout = sys.stdout                        # Save the original stdout handler
 
     @dumpArgs
@@ -121,7 +121,7 @@ class SerialTerminalWidget(QWidget):
         :param text: Text to display in the terminal window
         :return: Nothing
         """
-        self.text_update.emit(text)  # Send signal to synchronise call with main thread
+        self.text_update.emit(text)  # noqa  # Send signal to synchronise call with main thread
 
     def flush(self):
         """Handle sys.stdout.flush: do nothing
@@ -130,12 +130,19 @@ class SerialTerminalWidget(QWidget):
         """
         pass
 
-    def isatty(self):
+    @staticmethod
+    def isatty():
         """ to check if the given file descriptor is open and connected to tty(-like) device or not
 
         :return: True
         """
         return False
+
+    @staticmethod
+    def fileno():
+        """Return -1 as the fileno, to satisfy cmd2 redirection.
+        """
+        return -1
 
     def append_text(self, text):
         """Text display update handler.

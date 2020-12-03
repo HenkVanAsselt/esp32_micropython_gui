@@ -52,13 +52,24 @@ rem --- Generate DOXYGEN documentation
     call doxygen 
     goto _eof
 
-
 :sphinx
     pushd doc & call make html & popd
     goto _eof
 	
 :apidoc
 	sphinx-apidoc -o ./doc/_modules ./src
+	goto _eof
+	
+:pyinstaller
+	# Create the CLI executable with all supporting python files
+	pyinstaller src\esp32cli.py
+	# Create the standalone CLI executable 
+	pyinstaller --onefile src\esp32cli.py
+	# Create the GUI executable with all supporting python files
+	pyinstaller src\esp32gui.py
+	# Create the standalone GUI executable 
+	pyinstaller --onefile src\esp32gui.py	
+	goto _eof
 
 :clean
 	del /S *.bak

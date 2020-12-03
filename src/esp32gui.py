@@ -189,6 +189,12 @@ class MainWindow(QMainWindow):
         """
         return False
 
+    @staticmethod
+    def fileno():
+        """Return -1 as the fileno, to satisfy cmd2 redirection.
+        """
+        return -1
+
     # -------------------------------------------------------------------------
     @dumpFuncname
     def do_changemode(self, new_mode=None):
@@ -325,7 +331,6 @@ class MainWindow(QMainWindow):
 
         else:
             self.cmdlineapp.onecmd_plus_hooks(cmd_str)
-
 
         # --- This will search in the QT list instead of the manually maintained list
         # --- Needs: from PySide2.QtCore import Qt
