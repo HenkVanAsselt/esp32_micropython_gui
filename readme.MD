@@ -1,18 +1,13 @@
 esp32-shell
 ===========
 
-TUI / Text Based GUI for control a connected ESP32, running micropython.
-Will make use of existing software, like:
-* rshell.py
-* idf.py
-* ampy.py
-* mpfshell.py
-* pymakr
-	
-Will kill the program using occupying a COM port automatically
-List of possible programs to kill are in an .INI file
+CLI / GUI to control a connected ESP32, running micropython.
 
-The TUI to use is pyCUI (based on curses).
-See https://jwlodek.github.io/py_cui-docs/
+Will make use of existing software, like:
+* shell49 (https://github.com/bboser/shell49)
+* Adafruit ampy (https://github.com/scientifichackers/ampy)
+
+The CLI is based on cmd2 (https://github.com/python-cmd2/cmd2)
+The GUI is written using PySide2 (similar to PyQT5) and makes use of commands defined in the CLI.
 
 
