@@ -4,58 +4,43 @@
 
 import sys
 import subprocess
+from pathlib import Path
+from PySide2 import QtCore, QtGui
 from PySide2.QtWidgets import QApplication, QMainWindow
 from PySide2.QtGui import QTextCursor
 
 # Local imports
+import param
 from esp32shell_qt_design import Ui_MainWindow
 from lib.helper import debug, clear_debug_window
-from lib.decorators import dumpFuncname
+from lib.decorators import dumpFuncname, dumpArgs
+import esp32common
 
-COMPORT = ""
-COMPORT_DESC = ""
+import esp32cli
+
 
 MODE_COMMAND = 1
 MODE_REPL = 2
 
-
-# -----------------------------------------------------------------------------
-# Determine active USB to Serial COM port
-# -----------------------------------------------------------------------------
-def get_comport() -> tuple:
-
-    import comport
-
-    global COMPORT
-    global COMPORT_DESC
-
-    portlist, desclist = comport.serial_ports(usb=True)
-    try:
-        print(f"portlist = {portlist}")
-        COMPORT = portlist[0]
-        COMPORT_DESC = desclist[0]
-        print(COMPORT)
-        print(COMPORT_DESC)
-        return COMPORT, COMPORT_DESC
-    except IndexError:
-        err = "ERROR: Could not find an active COM port to the device\nIs any device connected?\n"
-        return "", err
+srcpath = Path('../upython_sources')        # @todo: Make this configurable
 
 
 # -----------------------------------------------------------------------------
-def ampy(*args) -> tuple:
-    """Run an ampy.exe command with the given arguments
+def localcmd(*args) -> tuple:
+    """Run a local command with the given arguments
 
     :param args: Variable length of arguments
     :returns: tuple of stdout and stderr text
     """
 
-    ampy_command_list = ["ampy", "-p", COMPORT]
+    debug(f"localcmd {args=}")
+    arglist = ['cmd']
     for arg in args:
-        ampy_command_list.append(arg)
+        arglist.extend(arg)
+    debug(f"{arglist=}")
 
     proc = subprocess.Popen(
-        ampy_command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        arglist, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
     )
     out, err = proc.communicate()
     return out.decode(), err.decode()
@@ -69,7 +54,7 @@ def rshell(*args) -> tuple:
     :returns: tuple of stdout and stderr text
     """
 
-    command_list = ["rshell", "-p", COMPORT, "repl"]
+    command_list = ["rshell", "-p", param.COMPORT, "repl"]
     for arg in args:
         command_list.append(arg)
 
@@ -89,12 +74,12 @@ def putty() -> tuple:
     :returns: tuple of stdout and stderr text
     """
 
-    putty_command_list = ["putty", "-serial", COMPORT, "-sercfg", "115200,8,n,1,N"]
+    putty_command_list = ["putty", "-serial", param.COMPORT, "-sercfg", "115200,8,n,1,N"]
 
     proc = subprocess.Popen(
         putty_command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
-    out, err = proc.communicate(input="\r\n")
+    out, err = proc.communicate(input=b"\r\n")
     return out.decode(), err.decode()
 
 
@@ -105,7 +90,7 @@ def miniterm() -> tuple:
     :returns: tuple of stdout and stderr text
     """
 
-    command_list = ["pyserial-miniterm.exe", COMPORT, "115200"]
+    command_list = ["pyserial-miniterm.exe", param.COMPORT, "115200"]
 
     subprocess.run(command_list, shell=True)
     return "", ""
@@ -115,6 +100,8 @@ def miniterm() -> tuple:
 class MainWindow(QMainWindow):
     """QT Main Window
     """
+
+    text_update = QtCore.Signal(str)        # PySide2
 
     def __init__(self):
         """Intialize the QT window
@@ -139,10 +126,68 @@ class MainWindow(QMainWindow):
         self.ui.radioButton_replmode.clicked.connect(self.do_changemode)
 
         # Show the serial port which will be used
-        self.show_text(f"Using {COMPORT} ({COMPORT_DESC}\r\n")
-        self.ui.label_comport.setText(f"{COMPORT} ({COMPORT_DESC}")
+        self.show_text(f"Using {param.COMPORT} ({param.COMPORT_DESC}\r\n")
+        self.ui.label_comport.setText(f"{param.COMPORT} ({param.COMPORT_DESC}")
 
         self.mode = MODE_COMMAND        # Start in Command mode
+
+        debug(f"sys.stdout was {sys.stdout=}")
+        self.org_stdout = sys.stdout
+        sys.stdout = self
+        sys.stderr = self
+        debug(f"now sys.stdout is {sys.stdout=}")
+        self.text_update.connect(self.append_text) # noqa # Connect text update to handler
+
+        self.ui.command_input.setFocus()
+
+        self.cmdlineapp = esp32cli.CmdLineApp()
+
+    # -------------------------------------------------------------------------
+    @dumpArgs
+    def write(self, text):
+        """Handle sys.stdout.write: update display
+
+        :param text: Text to display
+        :return: Nothing
+        """
+        self.text_update.emit(text)  # noqa # Send signal to synchronise call with main thread # noqa
+
+    # -------------------------------------------------------------------------
+    @dumpArgs
+    def append_text(self, text):
+        """Text display update handler.
+
+        :param text: Text to display
+        :return: Nothing
+        """
+
+        # debug(f"Append text \"{text=}\"")
+        cur = self.ui.text_output.textCursor()
+        cur.movePosition(QtGui.QTextCursor.End)  # Move cursor to end of text
+        s = str(text)
+        while s:
+            head, sep, s = s.partition("\n")  # Split line at LF
+            head = head.replace("\r", "")     # Remove the Carriage Returns to avoid double linespacing.
+            cur.insertText(head)  # Insert text at cursor
+            if sep:  # New line if LF
+                cur.insertBlock()
+        self.ui.text_output.setTextCursor(cur)  # Update visible cursor
+
+    @staticmethod
+    def flush(self):
+        """Handle sys.stdout.flush: do nothing
+
+        :return: Nothing
+        """
+        pass
+
+    @staticmethod
+    def isatty():
+        """ to check if the given file descriptor is open and connected to tty(-like) device or not
+
+        :return: True
+        """
+        return False
 
     # -------------------------------------------------------------------------
     @dumpFuncname
@@ -161,28 +206,31 @@ class MainWindow(QMainWindow):
                 new_mode = MODE_REPL
 
         if new_mode == MODE_COMMAND:
+            debug("New mode is MODE_COMMAND")
             self.ui.radioButton_replmode.setChecked(False)
             self.ui.radioButton_commandmode.setChecked(True)
-            # @todo: change background of repl window to gray
             self.ui.Repl.stop_repl()
             self.ui.command_input.setFocus()
             self.show_text("Now working in command mode")
+            debug(f"now sys.stdout was {sys.stdout=}")
+            sys.stdout = self
+            debug(f"now sys.stdout is {sys.stdout=}")
+            print('test stdout')
             self.mode = MODE_COMMAND
 
         elif new_mode == MODE_REPL:
+            debug("New mode is MODE_REPL")
             self.ui.radioButton_commandmode.setChecked(False)
             self.ui.radioButton_replmode.setChecked(True)
-            self.show_text("Switchng to REPL mode")
             self.ui.Repl.start_repl()
-            self.show_text("Now working in REPL mode")
             self.ui.Repl.textbox.setFocus()
             self.ui.Repl.textbox.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
+            self.show_text("Now working in REPL mode")
+            print('Now working in REPL mode')
             self.mode = MODE_REPL
 
         else:
             debug(f"ERROR, unknown mode {new_mode}")
-
-
 
     # -------------------------------------------------------------------------
     @dumpFuncname
@@ -207,6 +255,7 @@ class MainWindow(QMainWindow):
         return True
 
     # -------------------------------------------------------------------------
+    @dumpArgs
     def show_result(self, out: str, err: str):
         """Print the stdout and stderr strings in the output window.
         :param out: Stdout string or another normal output string
@@ -216,12 +265,10 @@ class MainWindow(QMainWindow):
 
         if out:
             self.ui.text_output.append(out)
-        if err:
-            self.ui.text_error_output.append("ERROR:\r\n")
-            self.ui.text_error_output.append(err)
 
-        if not err:
-            self.ui.text_error_output.clear()
+        if err:
+            self.ui.text_output.append("ERROR: ")
+            self.ui.text_output.append(err)
 
         return
 
@@ -234,18 +281,6 @@ class MainWindow(QMainWindow):
 
         if out:
             self.ui.text_output.append(out)
-        return
-
-    # -------------------------------------------------------------------------
-    def show_error(self, err: str):
-        """Print the stderr string in the output window.
-        :param err: Stderr string or another error message
-        :returns: Nothing
-        """
-
-        if err:
-            self.ui.text_error_output.append("\r\nERROR:\r\n")
-            self.ui.text_error_output.append(err)
         return
 
     # -------------------------------------------------------------------------
@@ -271,161 +306,39 @@ class MainWindow(QMainWindow):
         # Note: Only use return from one of the if/elif branches in case of an error.
         # At the end, the last command will be added to a list of commands.
 
-        out = ""
-        err = ""
-
         if self.mode == MODE_REPL:
-            self.show_text("Switching to command mode")
+            # self.show_text("Switching to command mode")
             self.do_changemode(MODE_COMMAND)
 
         if not cmd_str:
             cmd_str = self.ui.command_input.text()
 
-        if cmd_str == "cls": 
-            self.ui.text_error_output.setText("")
+        if cmd_str == "cls":
             self.ui.text_output.setText("")
             self.ui.Repl.textbox.setText("")
 
-        elif cmd_str == "putty":
-            out, err = putty()
-            self.show_result(out, err)
-
         elif cmd_str == "repl":
-            # out, err = rshell()
-            # self.show_result(out, err)
             self.do_changemode(MODE_REPL)
 
         elif cmd_str == "cmd":
-            # out, err = rshell()
-            # self.show_result(out, err)
             self.do_changemode(MODE_COMMAND)
 
-        # elif cmd_str == "miniterm":
-        #     out, err = miniterm()
-        #     self.show_result(out, err)
-
-        elif cmd_str == "reset":
-            self.show_result("", "Resetting connected device")
-            out, err = ampy("reset")
-            self.show_result(out, err)
-
-        elif cmd_str == "ls" or cmd_str == "dir":
-            out, err = ampy("ls", "-l")
-            self.show_text("Files and folders on connected device:")
-            self.show_result(out, err)
-
-        elif cmd_str.startswith("run"):
-            nr_arguments = len(cmd_str.split())
-            debug(f"get {nr_arguments=}")
-            if nr_arguments == 1:
-                self.show_error("ERROR: GET needs the name of the file to get, and the target filename.")
-                return
-            elif nr_arguments == 2:
-                cmd, targetfile = cmd_str.split()
-            else:
-                self.show_error(f"Invalid number of commands in \"{cmd_str}\"")
-                return
-            debug(f"{cmd_str=} {targetfile=}")
-            out, err = ampy("run", targetfile)
-            self.show_result(out, err)
-
-        elif cmd_str.startswith("get"):
-            nr_arguments = len(cmd_str.split())
-            debug(f"get {nr_arguments=}")
-            if nr_arguments == 1:
-                self.show_error("ERROR: GET needs the name of the file to get, and the target filename.")
-                return
-            elif nr_arguments == 2:
-                cmd, srcfile = cmd_str.split()
-                targetfile = srcfile
-            elif nr_arguments == 3:
-                cmd, srcfile, targetfile = cmd_str.split()
-            else:
-                self.show_error(f"Invalid number of commands in \"{cmd_str}\"")
-                return
-            debug(f"{cmd_str=} {srcfile=} {targetfile=}")
-            out, err = ampy("get", srcfile, targetfile)
-            self.show_result(out, err)
-
-        elif cmd_str.startswith("put"):
-            nr_arguments = len(cmd_str.split())
-            debug(f"get {nr_arguments=}")
-            if nr_arguments == 1:
-                self.show_error("ERROR: PUT needs the name of the file to get, and the target filename.")
-                return
-            elif nr_arguments == 2:
-                cmd, srcfile = cmd_str.split()
-                targetfile = srcfile
-            elif nr_arguments == 3:
-                cmd, srcfile, targetfile = cmd_str.split()
-            else:
-                self.show_error(f"Invalid number of commands in \"{cmd_str}\"")
-                return
-            debug(f"{cmd_str=} {srcfile=} {targetfile=}")
-            out, err = ampy("put", srcfile, targetfile)
-            self.show_result(out, err)
-
-        elif cmd_str.startswith("rm"):
-            nr_arguments = len(cmd_str.split())
-            debug(f"get {nr_arguments=}")
-            if nr_arguments == 1:
-                self.show_error("ERROR: PUT needs the name of the file to get, and the target filename.")
-                return
-            elif nr_arguments == 2:
-                cmd, targetfile = cmd_str.split()
-            else:
-                self.show_error(f"Invalid number of commands in \"{cmd_str}\"")
-                return
-            debug(f"{cmd_str=} {targetfile=}")
-            out, err = ampy("rm", targetfile)
-            self.show_result(out, err)
-
-        elif cmd_str.startswith("mkdir"):
-            nr_arguments = len(cmd_str.split())
-            debug(f"mkdir {nr_arguments=}")
-            if nr_arguments == 1:
-                self.show_error("mkdir ERROR: No foldername given.")
-                return
-            elif nr_arguments == 2:
-                cmd, foldername = cmd_str.split()
-                out, err = ampy('mkdir', foldername)
-                self.show_result(out, err)
-            else:
-                self.show_error(f"Invalid number of commands in \"{cmd_str}\"")
-                return
-
-        elif cmd_str.startswith("rmdir"):
-            nr_arguments = len(cmd_str.split())
-            debug(f"rmdir {nr_arguments=}")
-            if nr_arguments == 1:
-                self.show_error("rmdir ERROR: No foldername given.")
-                return
-            elif nr_arguments == 2:
-                cmd, foldername = cmd_str.split()
-                out, err = ampy('rmdir', foldername)
-                self.show_result(out, err)
-            else:
-                self.show_error(f"Invalid number of commands in \"{cmd_str}\"")
-                return
         else:
-            err = f"ERROR: Unknown command \"{cmd_str}\""
-            self.ui.text_error_output.setText(err)
+            self.cmdlineapp.onecmd_plus_hooks(cmd_str)
 
-        # If no error was found, clear the input window and add the command to the list
-        # of executed commands, but only if it is not in there yet
-        if not err:
-            # --- This will search in the QT list instead of the manually maintained list
-            # --- Needs: from PySide2.QtCore import Qt
-            # items = self.ui.commandlist.findItems(cmd_str, Qt.MatchExactly)
-            # print(f"found items: {items=}")
-            # for item in items:
-            #     print(f"{item=} {item.text()}")
-            self.ui.command_input.clear()
-            if cmd_str not in self.list_of_commands:
-                self.list_of_commands.append(cmd_str)
-                self.ui.commandlist.addItem(cmd_str)
-            else:
-                print(f"command \"{cmd_str}\" is already in the list of commands")
+
+        # --- This will search in the QT list instead of the manually maintained list
+        # --- Needs: from PySide2.QtCore import Qt
+        # items = self.ui.commandlist.findItems(cmd_str, Qt.MatchExactly)
+        # print(f"found items: {items=}")
+        # for item in items:
+        #     print(f"{item=} {item.text()}")
+        self.ui.command_input.clear()
+        if cmd_str not in self.list_of_commands:
+            self.list_of_commands.append(cmd_str)
+            self.ui.commandlist.addItem(cmd_str)
+        # else:
+        #     print(f"command \"{cmd_str}\" is already in the list of commands")
 
 
 # -----------------------------------------------------------------------------
@@ -433,7 +346,7 @@ if __name__ == "__main__":
 
     clear_debug_window()
 
-    port, desc = get_comport()
+    port, desc = esp32common.get_comport()
 
     app = QApplication(sys.argv)
     window = MainWindow()

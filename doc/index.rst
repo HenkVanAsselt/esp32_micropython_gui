@@ -10,10 +10,12 @@ ESP32 MicroPython GUI
    :maxdepth: 3
    :caption: Contents:
 
-   comport
+   esp32cli
    esp32gui
-   esp32_shell
-   pyside2_serial_terminal
+   
+   esp32common
+   
+   serialterminalwidget
 
 
 Indices and tables

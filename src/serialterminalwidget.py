@@ -104,13 +104,7 @@ class SerialTerminalWidget(QWidget):
         self.serth = SerialThread(portname, baudrate)       # Define the serial thread
 
         self.text_update.connect(self.append_text)          # Connect text update to handler
-
-        # The following 3 lines will be done in start_repl()
-        # self.org_stdout = sys.stdout                        # Save the original stdout handler
-        # sys.stdout = self                                   # Redirect sys.stdout to self
-        # self.serth.start()                                  # Start serial thread
-
-        # self.start_repl()
+        self.org_stdout = sys.stdout                        # Save the original stdout handler
 
     @dumpArgs
     def mousePressEvent(self, event):
@@ -135,6 +129,13 @@ class SerialTerminalWidget(QWidget):
         :return: Nothing
         """
         pass
+
+    def isatty(self):
+        """ to check if the given file descriptor is open and connected to tty(-like) device or not
+
+        :return: True
+        """
+        return False
 
     def append_text(self, text):
         """Text display update handler.
@@ -184,15 +185,18 @@ class SerialTerminalWidget(QWidget):
 
     @dumpArgs
     def start_repl(self):
-        self.org_stdout = sys.stdout                        # Save the original stdout handler
+        debug(f"sys.stdout was {sys.stdout=}")
         sys.stdout = self                                   # Redirect sys.stdout to self
         self.serth.start()
+        debug(f"now sys.stdout is {sys.stdout=}")
 
     @dumpArgs
     def stop_repl(self):
         self.serth.running = False      # Stop the serial thread
         self.serth.wait()               # Wait until serial thread terminates
+        debug(f"sys.stdout was {sys.stdout=}")
         sys.stdout = self.org_stdout    # Restore stdout
+        debug(f"now sys.stdout is {sys.stdout=}")
 
     @dumpArgs
     def closeEvent(self, event):  # Window closing

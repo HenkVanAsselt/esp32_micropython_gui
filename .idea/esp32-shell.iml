@@ -5,6 +5,8 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/lib" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/doc" />
+      <excludeFolder url="file://$MODULE_DIR$/src/.pytest_cache" />
+      <excludeFolder url="file://$MODULE_DIR$/src/archive" />
       <excludeFolder url="file://$MODULE_DIR$/src/lib/.pytest_cache" />
       <excludeFolder url="file://$MODULE_DIR$/src/lib/tests" />
     </content>

@@ -1,11 +1,16 @@
 # TNSIM requirements for pip
 # # Usage: pip install -r requirements.txt
 
+cmd2
 pyserial
 pylint
 ConfigArgParse
 PySide2
-py-cui
+
+# For ESP32 logic
+adafruit-ampy
+shell49
+
 
 # For documentation:
 Sphinx
