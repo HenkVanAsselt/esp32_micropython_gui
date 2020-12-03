@@ -122,8 +122,8 @@ class MainWindow(QMainWindow):
         self.ui.commandlist.itemClicked.connect(self.do_clicked_command)
 
         # Handle the switch from repl mode to command mode and visa versa
-        self.ui.radioButton_commandmode.clicked.connect(self.do_changemode)
-        self.ui.radioButton_replmode.clicked.connect(self.do_changemode)
+        self.ui.radioButton_commandmode.clicked.connect(self.change_to_command_mode)
+        self.ui.radioButton_replmode.clicked.connect(self.change_to_repl_mode)
 
         # Show the serial port which will be used
         self.show_text(f"Using {param.COMPORT} ({param.COMPORT_DESC}\r\n")
@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         self.cmdlineapp = esp32cli.CmdLineApp()
 
     # -------------------------------------------------------------------------
-    @dumpArgs
+    # @dumpArgs
     def write(self, text):
         """Handle sys.stdout.write: update display
 
@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
         self.text_update.emit(text)  # noqa # Send signal to synchronise call with main thread # noqa
 
     # -------------------------------------------------------------------------
-    @dumpArgs
+    # @dumpArgs
     def append_text(self, text):
         """Text display update handler.
 
@@ -192,12 +192,31 @@ class MainWindow(QMainWindow):
     @staticmethod
     def fileno():
         """Return -1 as the fileno, to satisfy cmd2 redirection.
+        @todo: This does not work for cmd2 !shellcommands yet.
         """
         return -1
 
     # -------------------------------------------------------------------------
     @dumpFuncname
-    def do_changemode(self, new_mode=None):
+    def change_to_command_mode(self):
+        """Switch to command mode.
+        """
+        debug("radiobox command clicked")
+        if not self.mode == MODE_COMMAND:
+            self.change_to_mode(MODE_COMMAND)
+
+    # -------------------------------------------------------------------------
+    @dumpFuncname
+    def change_to_repl_mode(self):
+        """Switch to REPL mode.
+        """
+        debug("radiobox repl clicked")
+        if not self.mode == MODE_REPL:
+            self.change_to_mode(MODE_REPL)
+
+    # -------------------------------------------------------------------------
+    @dumpFuncname
+    def change_to_mode(self, new_mode=None):
         """Handle the switch from repl mode to command mode and visa versa.
         """
 
@@ -211,29 +230,27 @@ class MainWindow(QMainWindow):
                 debug("replmode is checked")
                 new_mode = MODE_REPL
 
-        if new_mode == MODE_COMMAND:
-            debug("New mode is MODE_COMMAND")
+        if self.mode == MODE_REPL and new_mode == MODE_COMMAND:
+            debug("Switching to COMMAND mode")
             self.ui.radioButton_replmode.setChecked(False)
             self.ui.radioButton_commandmode.setChecked(True)
             self.ui.Repl.stop_repl()
             self.ui.command_input.setFocus()
-            self.show_text("Now working in command mode")
             debug(f"now sys.stdout was {sys.stdout=}")
             sys.stdout = self
             debug(f"now sys.stdout is {sys.stdout=}")
-            print('test stdout')
             self.mode = MODE_COMMAND
+            print("Switched to COMMAND mode\n")
 
-        elif new_mode == MODE_REPL:
-            debug("New mode is MODE_REPL")
+        elif self.mode == MODE_COMMAND and new_mode == MODE_REPL:
+            debug("Switching to REPL mode")
             self.ui.radioButton_commandmode.setChecked(False)
             self.ui.radioButton_replmode.setChecked(True)
             self.ui.Repl.start_repl()
             self.ui.Repl.textbox.setFocus()
             self.ui.Repl.textbox.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
-            self.show_text("Now working in REPL mode")
-            print('Now working in REPL mode')
             self.mode = MODE_REPL
+            print("Switched to REPL mode\n")
 
         else:
             debug(f"ERROR, unknown mode {new_mode}")
@@ -312,9 +329,8 @@ class MainWindow(QMainWindow):
         # Note: Only use return from one of the if/elif branches in case of an error.
         # At the end, the last command will be added to a list of commands.
 
-        if self.mode == MODE_REPL:
-            # self.show_text("Switching to command mode")
-            self.do_changemode(MODE_COMMAND)
+        if not self.mode == MODE_COMMAND:
+            self.change_to_command_mode()
 
         if not cmd_str:
             cmd_str = self.ui.command_input.text()
@@ -322,13 +338,10 @@ class MainWindow(QMainWindow):
         if cmd_str == "cls":
             self.ui.text_output.setText("")
             self.ui.Repl.textbox.setText("")
-
         elif cmd_str == "repl":
-            self.do_changemode(MODE_REPL)
-
+            self.change_to_repl_mode()
         elif cmd_str == "cmd":
-            self.do_changemode(MODE_COMMAND)
-
+            self.change_to_command_mode
         else:
             self.cmdlineapp.onecmd_plus_hooks(cmd_str)
 

@@ -14,7 +14,6 @@ pyinstaller
 adafruit-ampy
 shell49
 
-
 # For documentation:
 Sphinx
 sphinx_rtd_theme

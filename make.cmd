@@ -54,6 +54,7 @@ rem --- Generate DOXYGEN documentation
 
 :sphinx
     pushd doc & call make html & popd
+	"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" doc\_build\html\index.html
     goto _eof
 	
 :apidoc
@@ -69,6 +70,12 @@ rem --- Generate DOXYGEN documentation
 	pyinstaller src\esp32gui.py
 	# Create the standalone GUI executable 
 	pyinstaller --onefile src\esp32gui.py	
+	goto _eof
+	
+:mypy
+	pushd src
+	mypy .
+	popd 
 	goto _eof
 
 :clean

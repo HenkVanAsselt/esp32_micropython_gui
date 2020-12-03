@@ -11,7 +11,7 @@ import subprocess
 import datetime
 import argparse
 from pathlib import Path
-import cmd2
+import cmd2                 # type: ignore
 from cmd2 import with_argparser
 from cmd2 import style, fg, bg, CommandResult
 
@@ -107,9 +107,11 @@ class CmdLineApp(cmd2.Cmd):
     def do_get(self, statement):
         """Copy a file from the connected device to the PC
 
-        put sourcefile targetfile
+        get sourcefile targetfile
 
         If name of targetfile is not given, then it will become the same name as the sourcefile
+
+        Example: get blinky.py blinky2.py
         """
 
         debug(f"do_get {statement=}")
@@ -129,7 +131,6 @@ class CmdLineApp(cmd2.Cmd):
 
         if err:
             self.perror(err)
-            return
         if out:
             print(out)
 
@@ -139,15 +140,21 @@ class CmdLineApp(cmd2.Cmd):
         """Reset the connected device.
         """
         out, err = esp32common.reset()
-        print(out, err)
+        if err:
+            self.perror(err)
+        if out:
+            print(out)
 
     # ===========================================================================
     @cmd2.with_category(CMD_CAT_FILES)
     def do_ls(self, statement):
-        """Get files and folders from the device
+        """Show the files and folders stored on the device.
         """
         out, err = esp32common.ls()
-        print(out, err)
+        if err:
+            self.perror(err)
+        if out:
+            print(out)
 
     do_dir = do_ls      # Create an alias
 
@@ -160,7 +167,10 @@ class CmdLineApp(cmd2.Cmd):
         debug(f"{statement=}")
         targetfile = statement.arg_list[0]
         out, err = esp32common.run(targetfile)
-        print(out, err)
+        if err:
+            self.perror(err)
+        if out:
+            print(out)
 
     do_start = do_run       # Create an alias
 
@@ -168,12 +178,17 @@ class CmdLineApp(cmd2.Cmd):
     @cmd2.with_category(CMD_CAT_FILES)
     def do_rm(self, statement):
         """Remove/Delete file from the connected device.
+
+        Example: rm blinky.py
         """
 
         debug(f"{statement=}")
         targetfile = statement.arg_list[0]
         out, err = esp32common.rm(targetfile)
-        print(out, err)
+        if err:
+            self.perror(err)
+        if out:
+            print(out)
 
     do_del = do_rm      # Create an alias
 
@@ -181,17 +196,24 @@ class CmdLineApp(cmd2.Cmd):
     @cmd2.with_category(CMD_CAT_FILES)
     def do_mkdir(self, statement):
         """Make a directory on the connected device.
+
+        Example: mkdir testdir
         """
 
         debug(f"{statement=}")
         targetfile = statement.arg_list[0]
         out, err = esp32common.mkdir(targetfile)
-        print(out, err)
+        if err:
+            self.perror(err)
+        if out:
+            print(out)
 
     # ===========================================================================
     @cmd2.with_category(CMD_CAT_FILES)
     def do_rmdir(self, statement):
-        """Remove a directory on the connected device.
+        """Remove a directory from the connected device.
+
+        Example: rmdir testdir
         """
 
         debug(f"{statement=}")

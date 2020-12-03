@@ -6,7 +6,7 @@
 import queue
 import sys
 import time
-import serial
+import serial   # type: ignore
 
 
 from PySide2 import QtGui, QtCore
@@ -114,7 +114,7 @@ class SerialTerminalWidget(QWidget):
         self.serth.start()
         debug("Repl started (2)")
 
-    @dumpArgs
+    # @dumpArgs
     def write(self, text):
         """Handle sys.stdout.write: update display
 
@@ -265,11 +265,11 @@ class SerialThread(QtCore.QThread):
         while self.running:
             s = self.ser.read(self.ser.in_waiting or 1)
             if s:  # Get data from serial port
-                debug(f'Getting data from serial port: {s=}')
+                # debug(f'Getting data from serial port: {s=}')
                 self.ser_in(bytes_str(s))  # ..and convert to string
             if not self.txq.empty():
                 txd = str(self.txq.get())  # If Tx data in queue, write to serial port
-                debug(f"Writing \"{txd}\" to serial port")
+                # debug(f"Writing \"{txd}\" to serial port")
                 self.ser.write(str_bytes(txd))
         if self.ser:  # Close serial port when thread finished
             self.ser.close()
