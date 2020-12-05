@@ -6,20 +6,17 @@ This module contains the commandline loop, based on cmd2
 # Global imports
 import os
 import sys
-import functools
-import subprocess
-import datetime
 import argparse
 from pathlib import Path
 import cmd2                 # type: ignore
-from cmd2 import with_argparser
 from cmd2 import style, fg, bg, CommandResult
 
 # Local imports
 import lib.helper as helper
-from lib.helper import debug, clear_debug_window
-from lib.decorators import dumpFuncname, dumpArgs
+from lib.helper import debug
+import param
 import esp32common
+
 
 # ===============================================================================
 # CmdLineApp
@@ -43,10 +40,12 @@ class CmdLineApp(cmd2.Cmd):
     def __init__(self):
 
         startup_script = os.path.join(os.path.dirname(__file__), '.esp32clirc')
-        super().__init__(multiline_commands=['echo'], startup_script=startup_script, persistent_history_file='cmd2_history.dat')
+        super().__init__(multiline_commands=['echo'], startup_script=startup_script,
+                         persistent_history_file='cmd2_history.dat')
 
         # Prints an intro banner once upon application startup
-        self.intro = style("esp32 CLI (Command Line Interpreter)  \n'help' or '?' will show the available commands", fg=fg.red, bg=bg.white, bold=True)
+        self.intro = style("esp32 CLI (Command Line Interpreter)  \n'help' or '?' will show the available commands",
+                           fg=fg.red, bg=bg.white, bold=True)
 
         # Show this as the prompt when asking for input
         self.prompt = 'esp32cli> '
@@ -83,14 +82,14 @@ class CmdLineApp(cmd2.Cmd):
 
         debug(f"do_put {statement=}")
         if len(statement.arg_list) == 1:
-            srcfile = statement.arg_list[0]
-            targetfile = statement.arg_list[0]
+            srcfile = Path(statement.arg_list[0])
+            targetfile = Path(statement.arg_list[0])
         elif len(statement.arg_list) == 2:
-            srcfile = statement.arg_list[0]
-            targetfile = statement.arg_list[1]
+            srcfile = Path(statement.arg_list[0])
+            targetfile = Path(statement.arg_list[1])
         else:
             self.perror("Invalid number of arguments")
-            self.do_help('put')
+            self.do_help('put')     # noqa to prevent: Expected type 'Namespace', got 'str' instead
             self.last_result = CommandResult('', 'Bad arguments')
             return
 
@@ -98,7 +97,6 @@ class CmdLineApp(cmd2.Cmd):
 
         if err:
             self.perror(err)
-            return
         if out:
             print(out)
 
@@ -123,7 +121,7 @@ class CmdLineApp(cmd2.Cmd):
             targetfile = statement.arg_list[1]
         else:
             self.perror("Invalid number of arguments")
-            self.do_help('get')
+            self.do_help('get')   # noqa to prevent: Expected type 'Namespace', got 'str' instead
             self.last_result = CommandResult('', 'Bad arguments')
             return
 
@@ -238,6 +236,50 @@ class CmdLineApp(cmd2.Cmd):
         """
 
         print(statement)
+
+    # ===========================================================================
+    @cmd2.with_category(CMD_CAT_DEBUG)
+    def do_cls(self, statement):
+        """Clear the screen.
+        """
+
+        os.system('cls')
+
+    # ===========================================================================
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_sync(self, statement):
+        """Copy all python files (Sync) from the source folder to the connected device.
+
+        Examples:
+            * sync
+            * sycn c:/temp/upython_files
+
+        If no foldername is given, then implicitley hte internal default source
+        folder will be used.
+
+        """
+
+        debug(f"do_sync {statement=}")
+
+        sourcefolder = Path(param.srcpath)
+        if len(statement.arg_list) == 1:
+            sourcefolder = Path(statement.arg_list[0])
+
+        if not sourcefolder.is_dir():
+            print(f"Could not find folder {sourcefolder}")
+            return
+
+        # files = [e for e in sourcefolder.iterdir() if e.is_file()]
+        # for filename in files:
+        #     print(filename)
+
+        for filename in sourcefolder.glob('*.py'):
+            print(f"Syncing {filename}")
+            out, err = esp32common.put(filename, filename)
+            if err:
+                self.perror(err)
+            if out:
+                print(out)
 
 
 # ===============================================================================

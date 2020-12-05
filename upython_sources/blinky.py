@@ -1,12 +1,15 @@
 from machine import Pin
 from time import sleep
 
-led = Pin(2, Pin.OUT)
+def blink():
 
-while True:
-    print("on")
-    led.on()
-    sleep(0.1)
-    print("off")
-    led.off()
-    sleep(1.5)
+	led = Pin(2, Pin.OUT)
+
+	while True:
+		print("on")
+		led.on()
+		sleep(0.1)
+		print("off")
+		led.off()
+		sleep(1.5)
+

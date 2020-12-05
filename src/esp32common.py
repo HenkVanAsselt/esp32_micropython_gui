@@ -104,7 +104,7 @@ def shell49(*args) -> tuple:
 
 # -----------------------------------------------------------------------------
 @dumpArgs
-def put(srcfile, targetfile) -> tuple:
+def put(srcfile: Path, targetfile: Path) -> tuple:
     """
 
     :param srcfile: path to sourcefile
@@ -119,6 +119,8 @@ def put(srcfile, targetfile) -> tuple:
         err = f"Could not find {source}"
         debug(f"{out=}, {err=}")
         return out, err
+
+    targetfile = targetfile.name
 
     # Use Adafruit's ampy put command
     out, err = ampy("put", source, targetfile)
@@ -207,9 +209,10 @@ def rm(targetfile) -> tuple:
 def mkdir(targetfolder) -> tuple:
     """Create the given folder/directory on the connected device
 
-    :param targetfile: The folder to create
+    :param targetfolder: The folder to create
     :return: tuple of stdout and stderr messages
     """
+
     print(f"Creating folder {targetfolder}")
     out, err = ampy("mkdir", targetfolder)
     return out, err
