@@ -3,6 +3,8 @@
 # import pytest
 # pytest.skip('this doctest does not work on this module')
 
+# pylint: skip-file
+
 """
 tracetool API for python
 

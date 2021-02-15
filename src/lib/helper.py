@@ -15,7 +15,7 @@ from lib.tracetool import ttrace
 
 # -----------------------------------------------------------------------------
 def decrease_path_depth(path, maxdepth=2):
-    """Decrease the path to the last folders(s) / filename
+    r"""Decrease the path to the last folders(s) / filename
 
     >>> decrease_path_depth(r'C:\data\LXE\AndroidConfig\src\pyadb.py', 2)
     'src\\\\pyadb.py'

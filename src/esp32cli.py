@@ -12,9 +12,9 @@ import cmd2                 # type: ignore
 from cmd2 import style, fg, bg, CommandResult
 
 # Local imports
+import param
 import lib.helper as helper
 from lib.helper import debug
-import param
 import esp32common
 
 
@@ -82,10 +82,10 @@ class CmdLineApp(cmd2.Cmd):
 
         debug(f"do_put {statement=}")
         if len(statement.arg_list) == 1:
-            srcfile = Path(statement.arg_list[0])
+            srcfile = Path(param.config['src']['srcpath'], statement.arg_list[0])
             targetfile = Path(statement.arg_list[0])
         elif len(statement.arg_list) == 2:
-            srcfile = Path(statement.arg_list[0])
+            srcfile = Path(param.config['src']['srcpath'], statement.arg_list[0])
             targetfile = Path(statement.arg_list[1])
         else:
             self.perror("Invalid number of arguments")
@@ -115,10 +115,10 @@ class CmdLineApp(cmd2.Cmd):
         debug(f"do_get {statement=}")
         if len(statement.arg_list) == 1:
             srcfile = statement.arg_list[0]
-            targetfile = statement.arg_list[0]
+            targetfile = Path(param.config['src']['srcpath'], statement.arg_list[0])
         elif len(statement.arg_list) == 2:
             srcfile = statement.arg_list[0]
-            targetfile = statement.arg_list[1]
+            targetfile = Path(param.config['src']['srcpath'], statement.arg_list[1])
         else:
             self.perror("Invalid number of arguments")
             self.do_help('get')   # noqa to prevent: Expected type 'Namespace', got 'str' instead
@@ -261,7 +261,7 @@ class CmdLineApp(cmd2.Cmd):
 
         debug(f"do_sync {statement=}")
 
-        sourcefolder = Path(param.srcpath)
+        sourcefolder = Path(param.config['src']['srcpath'])
         if len(statement.arg_list) == 1:
             sourcefolder = Path(statement.arg_list[0])
 
@@ -282,11 +282,19 @@ class CmdLineApp(cmd2.Cmd):
                 print(out)
 
 
-# ===============================================================================
-if __name__ == "__main__":
+# -----------------------------------------------------------------------------
+def main():
 
     helper.clear_debug_window()
-    esp32common.get_comport()
+    port, desc = esp32common.get_comport()
+    debug(f"{port=}, {desc=}")
+
+    # Read configuration
+    config = esp32common.readconfig('esp32cli.ini')
+    param.config = config
+
+    param.config['com']['port'] = port
+    param.config['com']['desc'] = desc
 
     debug("sys.argv = %s" % sys.argv)
 
@@ -311,3 +319,8 @@ if __name__ == "__main__":
         app.cmdloop()
 
     sys.exit(0)
+
+
+# ===============================================================================
+if __name__ == "__main__":
+    main()

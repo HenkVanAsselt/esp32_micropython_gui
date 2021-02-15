@@ -3,8 +3,8 @@ try:
 except:
   import socket
 
-from machine import Pin
-import network
+from machine import Pin     # noqa
+import network              # noqa
 from time import sleep
 
 import esp

@@ -3,22 +3,24 @@
 
 # Global imports
 import subprocess
-from pathlib import Path
+import pathlib
+import configparser
+
+# 3rd party imports
 import serial.tools.list_ports  # type: ignore
 
 # Local imports
 import param
-# import lib.helper as helper
 from lib.helper import debug, clear_debug_window
 from lib.decorators import dumpArgs
 
 
 # -----------------------------------------------------------------------------
-def serial_ports(verbose=False, usb=True):
+def get_available_serial_ports(verbose=False, usb=True) -> tuple:
     """Lists serial port names.
 
     :param verbose: If True, print verbose port information
-    :param usb: If True, only list USB to UART bridges (like the one on an ESP32)
+    :param usb: If True, only list USB to UART bridges (like on an ESP32)
     :returns: A list of the serial ports available on the system
     """
 
@@ -30,7 +32,7 @@ def serial_ports(verbose=False, usb=True):
     for port, desc, hwid in sorted(ports):
         if verbose:
             print(f"{port} {desc} {hwid}")
-        if usb:     # If we should only return USB serial ports
+        if usb:  # If we should only return USB serial ports
             if "USB" in desc.upper():
                 portlist.append(port)
                 desclist.append(desc)
@@ -40,8 +42,6 @@ def serial_ports(verbose=False, usb=True):
 
 
 # -----------------------------------------------------------------------------
-#
-# -----------------------------------------------------------------------------
 def get_comport() -> tuple:
     """Determine active USB to Serial COM port.
 
@@ -50,17 +50,16 @@ def get_comport() -> tuple:
     Example: ("COM5", "(Silicon Labs CP210x USB to UART Bridge (COM5)")
     """
 
-    portlist, desclist = serial_ports(usb=True)
-    try:
-        # print(f"portlist = {portlist}")
-        param.COMPORT = portlist[0]
-        param.COMPORT_DESC = desclist[0]
-        # print(param.COMPORT)
-        # print(param.COMPORT_DESC)
-        return param.COMPORT, param.COMPORT_DESC
-    except IndexError:
+    portlist, desclist = get_available_serial_ports(usb=True)
+    if not portlist:
         err = "ERROR: Could not find an active COM port to the device\nIs any device connected?\n"
+        debug(err)
         return "", err
+
+    port = portlist[0]
+    desc = desclist[0]
+    debug(f"get_comport() returns {port=}, {desc=}")
+    return port, desc
 
 
 # -----------------------------------------------------------------------------
@@ -71,7 +70,8 @@ def ampy(*args) -> tuple:
     :returns: tuple of stdout and stderr text
     """
 
-    command_list = ["ampy", "-p", param.COMPORT]
+    port = param.config["com"]["port"]
+    command_list = ["ampy", "-p", port]
     for arg in args:
         command_list.append(arg)
 
@@ -104,7 +104,7 @@ def shell49(*args) -> tuple:
 
 # -----------------------------------------------------------------------------
 @dumpArgs
-def put(srcfile: Path, targetfile: Path) -> tuple:
+def put(srcfile: pathlib.Path, targetfile: pathlib.Path) -> tuple:
     """
 
     :param srcfile: path to sourcefile
@@ -113,7 +113,7 @@ def put(srcfile: Path, targetfile: Path) -> tuple:
     """
 
     # Check if sourcefile can be found
-    source = Path(param.srcpath, srcfile)
+    source = pathlib.Path(srcfile)
     if not source.is_file():
         out = ""
         err = f"Could not find {source}"
@@ -134,7 +134,7 @@ def put(srcfile: Path, targetfile: Path) -> tuple:
 # -----------------------------------------------------------------------------
 @dumpArgs
 def get(srcfile, targetfile) -> tuple:
-    """
+    """Get a file from the connected device. Makes use of ampy
 
     :param srcfile: path to sourcefile (on the device)
     :param targetfile: path to targetfile (on the PC)
@@ -142,7 +142,7 @@ def get(srcfile, targetfile) -> tuple:
     """
 
     # Add the path to uPython sources
-    target = Path(param.srcpath, targetfile)
+    target = pathlib.Path(targetfile)
 
     # Use Adafruit's ampy get command
     out, err = ampy("get", srcfile, target)
@@ -226,8 +226,34 @@ def rmdir(targetfolder):
     return out, err
 
 
+# -----------------------------------------------------------------------------
+@dumpArgs
+def readconfig(filename="esp32cli.ini"):
+    """Read configuration from the given INI file
+
+    :param filename: Name of the configuration file to read
+    """
+
+    config = configparser.ConfigParser()
+    config.read(filename)
+    return config
+
+
+# -----------------------------------------------------------------------------
+@dumpArgs
+def saveconfig(config, filename="esp32cli.ini"):
+    """Read configuration from the given file.
+
+    :param config: configparser instancet
+    :param filename: The name to which to write the configuration in
+    """
+
+    with open(filename, "w") as configfile:
+        config.write(configfile)
+
+
 # ===============================================================================
 if __name__ == "__main__":
 
     clear_debug_window()
-    print(serial_ports(verbose=True, usb=True))
+    print(get_available_serial_ports(verbose=True, usb=True))

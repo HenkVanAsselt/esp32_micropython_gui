@@ -4,7 +4,6 @@
 
 import sys
 import subprocess
-from pathlib import Path
 from PySide2 import QtCore, QtGui
 from PySide2.QtWidgets import QApplication, QMainWindow
 from PySide2.QtGui import QTextCursor
@@ -21,8 +20,6 @@ import esp32cli
 
 MODE_COMMAND = 1
 MODE_REPL = 2
-
-srcpath = Path('../upython_sources')        # @todo: Make this configurable
 
 
 # -----------------------------------------------------------------------------
@@ -47,14 +44,15 @@ def localcmd(*args) -> tuple:
 
 
 # -----------------------------------------------------------------------------
-def rshell(*args) -> tuple:
+def rshell(port, *args) -> tuple:
     """Run an rshell.exe command with the given arguments
 
+    :param port: Com port to use (string)
     :param args: Variable length of arguments
     :returns: tuple of stdout and stderr text
     """
 
-    command_list = ["rshell", "-p", param.COMPORT, "repl"]
+    command_list = ["rshell", "-p", port, "repl"]
     for arg in args:
         command_list.append(arg)
 
@@ -68,13 +66,14 @@ def rshell(*args) -> tuple:
 
 
 # -----------------------------------------------------------------------------
-def putty() -> tuple:
+def putty(port) -> tuple:
     """Run putty.exe with the given arguments
 
+    :param port: Com port to use (string)
     :returns: tuple of stdout and stderr text
     """
 
-    putty_command_list = ["putty", "-serial", param.COMPORT, "-sercfg", "115200,8,n,1,N"]
+    putty_command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
 
     proc = subprocess.Popen(
         putty_command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -84,13 +83,14 @@ def putty() -> tuple:
 
 
 # -----------------------------------------------------------------------------
-def miniterm() -> tuple:
+def miniterm(port) -> tuple:
     """Run putty.exe with the given arguments
 
+    :param port: Com port to use (string)
     :returns: tuple of stdout and stderr text
     """
 
-    command_list = ["pyserial-miniterm.exe", param.COMPORT, "115200"]
+    command_list = ["pyserial-miniterm.exe", port, "115200"]
 
     subprocess.run(command_list, shell=True)
     return "", ""
@@ -111,11 +111,10 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        # If neccessary, set properties of some elements
-        self.set_ui_properties()
-
         # After a command is entered, and ENTER is pressed, react on it
         self.ui.command_input.returnPressed.connect(self.do_command)
+
+        self.ui.lineEdit_srcpath.returnPressed.connect(self.get_ui_properties)
 
         # If a command from the list of commands is clicked, execute it
         self.list_of_commands = []
@@ -125,9 +124,16 @@ class MainWindow(QMainWindow):
         self.ui.radioButton_commandmode.clicked.connect(self.change_to_command_mode)
         self.ui.radioButton_replmode.clicked.connect(self.change_to_repl_mode)
 
-        # Show the serial port which will be used
-        self.show_text(f"Using {param.COMPORT} ({param.COMPORT_DESC}\r\n")
-        self.ui.label_comport.setText(f"{param.COMPORT} ({param.COMPORT_DESC}")
+        # Read configuration
+        self.config = esp32common.readconfig('esp32cli.ini')
+        param.config = self.config
+
+        port, desc = esp32common.get_comport()
+        self.config['com']['port'] = port
+        self.config['com']['desc'] = desc
+
+        # If neccessary, set properties of some elements
+        self.set_ui_properties()
 
         self.mode = MODE_COMMAND        # Start in Command mode
 
@@ -260,6 +266,13 @@ class MainWindow(QMainWindow):
     def get_ui_properties(self):
         """Get the values from the UI textfields, checkboxes and radiobuttons"""
 
+        # Save GUI setting
+        srcpath = self.ui.lineEdit_srcpath.text()
+        self.config['src']['srcpath'] = srcpath
+
+        # Save the (modified configuration file)
+        esp32common.saveconfig(self.config)
+
         return
 
     # -------------------------------------------------------------------------
@@ -271,6 +284,16 @@ class MainWindow(QMainWindow):
 
             # Main window properties
             self.setWindowTitle("ESP32 microPython GUI/Shell")
+
+            # Show current uPython source path
+            srcpath = self.config['src']['srcpath']
+            self.ui.lineEdit_srcpath.setText(srcpath)
+
+            # Show the serial port which will be used
+            port = self.config['com']['port']
+            desc = self.config['com']['desc']
+            self.show_text(f"Using {port} {desc}\r\n")
+            self.ui.label_comport.setText(f"{port} ({desc}")
 
         except Exception as e:
             debug(e)
@@ -341,7 +364,7 @@ class MainWindow(QMainWindow):
         elif cmd_str == "repl":
             self.change_to_repl_mode()
         elif cmd_str == "cmd":
-            self.change_to_command_mode
+            self.change_to_command_mode()
         else:
             self.cmdlineapp.onecmd_plus_hooks(cmd_str)
 
@@ -364,7 +387,9 @@ if __name__ == "__main__":
 
     clear_debug_window()
 
-    port, desc = esp32common.get_comport()
+    # port, desc = esp32common.get_comport()
+    # config['com']['port'] = port
+    # config['com']['desc'] = desc
 
     app = QApplication(sys.argv)
     window = MainWindow()

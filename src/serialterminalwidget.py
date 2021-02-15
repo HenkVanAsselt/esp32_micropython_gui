@@ -22,7 +22,7 @@ SER_TIMEOUT = 0.1  # Timeout for serial Rx
 RETURN_CHAR = "\r"  # Char to be sent when Enter key pressed
 PASTE_CHAR = "\x16"  # Ctrl code for clipboard paste
 baudrate = 115200  # Default baud rate
-portname = "COM5"  # Default port name
+portname = "COM4"  # Default port name
 hexmode = False  # Flag to enable hex display
 
 

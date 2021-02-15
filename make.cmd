@@ -24,8 +24,14 @@ echo ui2py				 Convert QT designer UI file to .py file
 
 goto _eof
 
+
+rem --- Run pylint
+:pylint
+	pylint --msg-template="{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}" -r n -d E0611,R0201,C0301 --extension-pkg-whitelist=win32api src
+	goto _eof
+
 rem --- Run flake8 
-:flake
+:flake8
 	flake8 --exclude=lib,tests,*_qt_design*,doc --max-line-length=140 --ignore=
 	goto _eof
 
@@ -62,13 +68,13 @@ rem --- Generate DOXYGEN documentation
 	goto _eof
 	
 :pyinstaller
-	# Create the CLI executable with all supporting python files
+	REM --- Create the CLI executable with all supporting python files
 	pyinstaller src\esp32cli.py
-	# Create the standalone CLI executable 
+	REM --- Create the standalone CLI executable 
 	pyinstaller --onefile src\esp32cli.py
-	# Create the GUI executable with all supporting python files
+	REM --- Create the GUI executable with all supporting python files
 	pyinstaller src\esp32gui.py
-	# Create the standalone GUI executable 
+	REM --- Create the standalone GUI executable 
 	pyinstaller --onefile src\esp32gui.py	
 	goto _eof
 	

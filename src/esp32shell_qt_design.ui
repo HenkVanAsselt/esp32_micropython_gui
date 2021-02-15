@@ -51,7 +51,7 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>50</y>
+      <y>70</y>
       <width>841</width>
       <height>20</height>
      </rect>
@@ -61,7 +61,7 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>30</y>
+      <y>40</y>
       <width>111</width>
       <height>16</height>
      </rect>
@@ -109,8 +109,8 @@
    <widget class="QRadioButton" name="radioButton_commandmode">
     <property name="geometry">
      <rect>
-      <x>551</x>
-      <y>20</y>
+      <x>130</x>
+      <y>40</y>
       <width>141</width>
       <height>20</height>
      </rect>
@@ -125,8 +125,8 @@
    <widget class="QRadioButton" name="radioButton_replmode">
     <property name="geometry">
      <rect>
-      <x>691</x>
-      <y>20</y>
+      <x>270</x>
+      <y>40</y>
       <width>121</width>
       <height>20</height>
      </rect>
@@ -140,12 +140,35 @@
      <rect>
       <x>30</x>
       <y>10</y>
-      <width>511</width>
+      <width>441</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
      <string>COM: </string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_srcpath">
+    <property name="geometry">
+     <rect>
+      <x>380</x>
+      <y>40</y>
+      <width>81</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Source path</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_srcpath">
+    <property name="geometry">
+     <rect>
+      <x>480</x>
+      <y>40</y>
+      <width>391</width>
+      <height>20</height>
+     </rect>
     </property>
    </widget>
   </widget>
