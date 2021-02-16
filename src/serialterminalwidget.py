@@ -12,8 +12,7 @@ import serial   # type: ignore
 from PySide2 import QtGui, QtCore
 from PySide2.QtWidgets import QTextEdit, QWidget, QApplication, QVBoxLayout
 
-from lib.helper import debug, clear_debug_window
-from lib.decorators import dumpFuncname, dumpArgs
+from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
 
 VERSION = "v0.09"
 

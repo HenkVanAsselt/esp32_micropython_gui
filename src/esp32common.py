@@ -12,8 +12,7 @@ import serial.tools.list_ports  # type: ignore
 
 # Local imports
 import param
-from lib.helper import debug, clear_debug_window
-from lib.decorators import dumpArgs
+from lib.helper import debug, clear_debug_window, dumpArgs
 
 
 # -----------------------------------------------------------------------------

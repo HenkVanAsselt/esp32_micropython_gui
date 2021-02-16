@@ -11,11 +11,10 @@ from PySide2.QtGui import QTextCursor
 # Local imports
 import param
 from esp32shell_qt_design import Ui_MainWindow
-from lib.helper import debug, clear_debug_window
-from lib.decorators import dumpFuncname, dumpArgs
+from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
 import esp32common
 
-import esp32cli
+import esp32cli_new
 
 
 MODE_COMMAND = 1
@@ -146,7 +145,7 @@ class MainWindow(QMainWindow):
 
         self.ui.command_input.setFocus()
 
-        self.cmdlineapp = esp32cli.CmdLineApp()
+        self.cmdlineapp = esp32cli_new.MpFileShell()
 
     # -------------------------------------------------------------------------
     # @dumpArgs
