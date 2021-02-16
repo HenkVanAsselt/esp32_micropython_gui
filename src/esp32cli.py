@@ -32,7 +32,7 @@ class CmdLineApp(cmd2.Cmd):
     # Define the help categories
     CMD_CAT_CONNECTING = "Connections"
     CMD_CAT_FILES = "Files and folders"
-    CMD_CAT_EDIT = "Edit settings"
+    CMD_CAT_EDIT = "Edit files"
     CMD_CAT_INFO = "Information"
     CMD_CAT_DEBUG = "Debug and test"
     CMD_CAT_REBOOT = "Reboot related commands"

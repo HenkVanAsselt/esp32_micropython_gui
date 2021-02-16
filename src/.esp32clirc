@@ -1,2 +1,1 @@
-alias create repl !shell49 repl
 alias create boards !shell49 boards
