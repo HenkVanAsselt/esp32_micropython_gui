@@ -7,7 +7,10 @@ This module contains the commandline loop, based on cmd2
 import os
 import sys
 import argparse
-from pathlib import Path
+import pathlib
+import tempfile
+
+# 3rd party imports
 import cmd2                 # type: ignore
 from cmd2 import style, fg, bg, CommandResult
 
@@ -82,11 +85,11 @@ class CmdLineApp(cmd2.Cmd):
 
         debug(f"do_put {statement=}")
         if len(statement.arg_list) == 1:
-            srcfile = Path(param.config['src']['srcpath'], statement.arg_list[0])
-            targetfile = Path(statement.arg_list[0])
+            srcfile = pathlib.Path(param.config['src']['srcpath'], statement.arg_list[0])
+            targetfile = pathlib.Path(statement.arg_list[0])
         elif len(statement.arg_list) == 2:
-            srcfile = Path(param.config['src']['srcpath'], statement.arg_list[0])
-            targetfile = Path(statement.arg_list[1])
+            srcfile = pathlib.Path(param.config['src']['srcpath'], statement.arg_list[0])
+            targetfile = pathlib.Path(statement.arg_list[1])
         else:
             self.perror("Invalid number of arguments")
             self.do_help('put')     # noqa to prevent: Expected type 'Namespace', got 'str' instead
@@ -115,10 +118,10 @@ class CmdLineApp(cmd2.Cmd):
         debug(f"do_get {statement=}")
         if len(statement.arg_list) == 1:
             srcfile = statement.arg_list[0]
-            targetfile = Path(param.config['src']['srcpath'], statement.arg_list[0])
+            targetfile = pathlib.Path(param.config['src']['srcpath'], statement.arg_list[0])
         elif len(statement.arg_list) == 2:
             srcfile = statement.arg_list[0]
-            targetfile = Path(param.config['src']['srcpath'], statement.arg_list[1])
+            targetfile = pathlib.Path(param.config['src']['srcpath'], statement.arg_list[1])
         else:
             self.perror("Invalid number of arguments")
             self.do_help('get')   # noqa to prevent: Expected type 'Namespace', got 'str' instead
@@ -158,13 +161,93 @@ class CmdLineApp(cmd2.Cmd):
 
     # ===========================================================================
     @cmd2.with_category(CMD_CAT_FILES)
+    def do_ldir(self, statement):
+        """List the files and folders in the source folder
+        """
+
+        sourcefolder = pathlib.Path(param.config['src']['srcpath'])
+        if not sourcefolder.is_dir():
+            self.perror(f"Could not find folder {sourcefolder}")
+            return
+
+        files = sorted(sourcefolder.glob('**/*'))
+        filenames = [f.name for f in files if f.is_file()]
+        for filename in filenames:
+            print(f"{filename.strip()}\n")
+
+    # ===========================================================================
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_ledit(self, statement):
+        """Edit a file in the local source folder on the PC.
+
+        If it is an absolute path is given, then use the absolute path.
+        If not, then handle the filename as part of the defined micropython source folder
+
+        """
+
+        debug(f"edit {statement=}")
+        filename = statement.args       # Just the raw argument string
+
+        # If the given filename is not absolute, then assume it is located
+        # in the current micropython sourcefolder
+        if not pathlib.Path(filename).is_absolute():
+            sourcefolder = esp32common.get_sourcefolder()
+            sourcefile = sourcefolder.joinpath(filename)
+        else:
+            sourcefile = filename
+
+        editor = pathlib.Path("C:/Program Files/Notepad++/notepad++.exe")
+        cmdstr = f'"{editor}" "{sourcefile}"'
+        esp32common.local_run(cmdstr)
+
+    # ===========================================================================
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_edit(self, statement):
+        """Edit a file on the remote device.
+
+        First check if the file is actually there.
+        If so, get it as a local file.
+        Edit it, and put it back when it was changed.
+        """
+
+        filename = statement.args
+        if not filename.startswith('/'):
+            self.perror(f"Error: {filename} does not start with an '/'")
+            return
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+
+            local_filename = os.path.join(temp_dir, os.path.basename(filename))
+            debug(f"{local_filename=}")
+
+            print(f"Retrieving {filename}")
+            esp32common.get(filename, local_filename)
+
+            editor = pathlib.Path("C:/Program Files/Notepad++/notepad++.exe")
+            cmdstr = f'"{editor}" "{local_filename}"'
+            esp32common.local_run(cmdstr)
+
+            print(f"Updating {filename}")
+            esp32common.put(local_filename, filename)
+
+    # ===========================================================================
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_lcd(self, statement):
+        """Change the folder with sourcefiles
+        """
+
+        debug(f"lcd {statement=}")
+        esp32common.set_sourcefolder(statement.args)
+
+    # ===========================================================================
+    @cmd2.with_category(CMD_CAT_FILES)
     def do_run(self, statement):
         """Run the given file on the connected device
         """
 
         debug(f"{statement=}")
         targetfile = statement.arg_list[0]
-        out, err = esp32common.run(targetfile)
+        out, err = esp32common.remote_run(targetfile)
         if err:
             self.perror(err)
         if out:
@@ -261,9 +344,9 @@ class CmdLineApp(cmd2.Cmd):
 
         debug(f"do_sync {statement=}")
 
-        sourcefolder = Path(param.config['src']['srcpath'])
+        sourcefolder = pathlib.Path(param.config['src']['srcpath'])
         if len(statement.arg_list) == 1:
-            sourcefolder = Path(statement.arg_list[0])
+            sourcefolder = pathlib.Path(statement.arg_list[0])
 
         if not sourcefolder.is_dir():
             print(f"Could not find folder {sourcefolder}")
@@ -275,7 +358,7 @@ class CmdLineApp(cmd2.Cmd):
 
         for filename in sourcefolder.glob('*.py'):
             print(f"Syncing {filename}")
-            out, err = esp32common.put(filename, filename)
+            out, err = esp32common.put(str(filename), str(filename))
             if err:
                 self.perror(err)
             if out:
@@ -323,4 +406,5 @@ def main():
 
 # ===============================================================================
 if __name__ == "__main__":
+
     main()
