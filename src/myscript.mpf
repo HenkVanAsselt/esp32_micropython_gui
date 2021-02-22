@@ -1,0 +1,3 @@
+open COM4
+ls
+cat /boot.py

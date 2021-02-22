@@ -42,7 +42,7 @@ def get_available_serial_ports(verbose=False, usb=True) -> tuple:
 
 
 # -----------------------------------------------------------------------------
-def get_comport() -> tuple:
+def get_active_comport() -> tuple:
     """Determine active USB to Serial COM port.
 
     :return: tuple of COMport string and verbose description
@@ -62,191 +62,191 @@ def get_comport() -> tuple:
     return port, desc
 
 
-# -----------------------------------------------------------------------------
-def ampy(*args) -> tuple:
-    """Run an ampy.exe command with the given arguments
-
-    :param args: Variable length of arguments
-    :returns: tuple of stdout and stderr text
-    """
-
-    port = param.config["com"]["port"]
-    command_list = ["ampy", "-p", port]
-    for arg in args:
-        command_list.append(arg)
-
-    proc = subprocess.Popen(
-        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = proc.communicate()
-    return out.decode(), err.decode()
-
-
-# -----------------------------------------------------------------------------
-def shell49(*args) -> tuple:
-    """Run an shell49.exe command with the given arguments
-
-    :param args: Variable length of arguments
-    :returns: tuple of stdout and stderr text
-    """
-
-    command_list = ["shell49"]
-    for arg in args:
-        command_list.append(arg)
-    debug(f"{command_list=}")
-
-    proc = subprocess.Popen(
-        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = proc.communicate()
-    return out.decode(), err.decode()
+# # -----------------------------------------------------------------------------
+# def ampy(*args) -> tuple:
+#     """Run an ampy.exe command with the given arguments
+#
+#     :param args: Variable length of arguments
+#     :returns: tuple of stdout and stderr text
+#     """
+#
+#     port = param.config["com"]["port"]
+#     command_list = ["ampy", "-p", port]
+#     for arg in args:
+#         command_list.append(arg)
+#
+#     proc = subprocess.Popen(
+#         command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+#     )
+#     out, err = proc.communicate()
+#     return out.decode(), err.decode()
 
 
-# -----------------------------------------------------------------------------
-@dumpArgs
-def put(srcfile: str, targetfile: str) -> tuple:
-    """
-
-    :param srcfile: path to sourcefile
-    :param targetfile: path to target
-    :return: tuple of return stdout and stderr messages
-    """
-
-    # Check if sourcefile can be found
-    source = pathlib.Path(srcfile)
-    if not source.is_file():
-        out = ""
-        err = f"Could not find {source}"
-        debug(f"{out=}, {err=}")
-        return out, err
-
-    # Use Adafruit's ampy put command
-    out, err = ampy("put", source, targetfile)
-    if not err:
-        out = f"Copied {source} to device as {targetfile}"
-
-    debug(f"{out=}, {err=}")
-    return out, err
+# # -----------------------------------------------------------------------------
+# def shell49(*args) -> tuple:
+#     """Run an shell49.exe command with the given arguments
+#
+#     :param args: Variable length of arguments
+#     :returns: tuple of stdout and stderr text
+#     """
+#
+#     command_list = ["shell49"]
+#     for arg in args:
+#         command_list.append(arg)
+#     debug(f"{command_list=}")
+#
+#     proc = subprocess.Popen(
+#         command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+#     )
+#     out, err = proc.communicate()
+#     return out.decode(), err.decode()
 
 
-# -----------------------------------------------------------------------------
-@dumpArgs
-def get(srcfile, targetfile) -> tuple:
-    """Get a file from the connected device. Makes use of ampy
-
-    :param srcfile: path to sourcefile (on the device)
-    :param targetfile: path to targetfile (on the PC)
-    :return: tuple of stdout and stderr messages
-    """
-
-    # Add the path to uPython sources
-    target = pathlib.Path(targetfile)
-
-    # Use Adafruit's ampy get command
-    out, err = ampy("get", srcfile, target)
-
-    if not err:
-        out = f"Copied \"{srcfile}\" from device to \"{target}\""
-    else:
-        print("Error in copying {srcfile}")
-    return out, err
-
-
-# -----------------------------------------------------------------------------
-@dumpArgs
-def reset() -> tuple:
-    """Soft reset the connected device.
-
-    :return: tuple of stdout and stderr messages
-    """
-    print("Resetting connected device")
-    out, err = ampy("reset")
-    return out, err
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def put(srcfile: str, targetfile: str) -> tuple:
+#     """
+#
+#     :param srcfile: path to sourcefile
+#     :param targetfile: path to target
+#     :return: tuple of return stdout and stderr messages
+#     """
+#
+#     # Check if sourcefile can be found
+#     source = pathlib.Path(srcfile)
+#     if not source.is_file():
+#         out = ""
+#         err = f"Could not find {source}"
+#         debug(f"{out=}, {err=}")
+#         return out, err
+#
+#     # Use Adafruit's ampy put command
+#     out, err = ampy("put", source, targetfile)
+#     if not err:
+#         out = f"Copied {source} to device as {targetfile}"
+#
+#     debug(f"{out=}, {err=}")
+#     return out, err
 
 
-# -----------------------------------------------------------------------------
-@dumpArgs
-def ls() -> tuple:
-    """Show the files/folders on the connected device
-
-    :return: tuple of stdout and stderr messages
-    """
-    out, err = ampy("ls", "-l")
-    print("Files and folders on connected device:")
-    return out, err
-
-
-# -----------------------------------------------------------------------------
-@dumpArgs
-def listdir() -> list:
-    """Get a list of files from the connected device
-
-    :return: list of filenames
-    """
-    out, err = ampy("ls")
-    if err:
-        print(f"ERROR: {err}")
-        return []
-
-    ret_list = out.split()
-    debug(f"listdir() {ret_list=}")
-    return ret_list
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def get(srcfile, targetfile) -> tuple:
+#     """Get a file from the connected device. Makes use of ampy
+#
+#     :param srcfile: path to sourcefile (on the device)
+#     :param targetfile: path to targetfile (on the PC)
+#     :return: tuple of stdout and stderr messages
+#     """
+#
+#     # Add the path to uPython sources
+#     target = pathlib.Path(targetfile)
+#
+#     # Use Adafruit's ampy get command
+#     out, err = ampy("get", srcfile, target)
+#
+#     if not err:
+#         out = f"Copied \"{srcfile}\" from device to \"{target}\""
+#     else:
+#         print("Error in copying {srcfile}")
+#     return out, err
 
 
-# -----------------------------------------------------------------------------
-@dumpArgs
-def remote_run(targetfile) -> tuple:
-    """Run the given file on the connected device.
-
-    :param targetfile: The file to run
-    :return: tuple of stdout and stderr messages
-
-    Note: The file must already exist
-    """
-    print(f"Start runing {targetfile}")
-    out, err = ampy("run", targetfile)
-    return out, err
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def reset() -> tuple:
+#     """Soft reset the connected device.
+#
+#     :return: tuple of stdout and stderr messages
+#     """
+#     print("Resetting connected device")
+#     out, err = ampy("reset")
+#     return out, err
 
 
-# -----------------------------------------------------------------------------
-@dumpArgs
-def rm(targetfile) -> tuple:
-    """Remove/Delete the given file from the connected device
-
-    :param targetfile: The file to remove
-    :return: tuple of stdout and stderr messages
-    """
-    print(f"Removing {targetfile}")
-    out, err = ampy("rm", targetfile)
-    return out, err
-
-
-# -----------------------------------------------------------------------------
-@dumpArgs
-def mkdir(targetfolder) -> tuple:
-    """Create the given folder/directory on the connected device
-
-    :param targetfolder: The folder to create
-    :return: tuple of stdout and stderr messages
-    """
-
-    print(f"Creating folder {targetfolder}")
-    out, err = ampy("mkdir", targetfolder)
-    return out, err
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def ls() -> tuple:
+#     """Show the files/folders on the connected device
+#
+#     :return: tuple of stdout and stderr messages
+#     """
+#     out, err = ampy("ls", "-l")
+#     print("Files and folders on connected device:")
+#     return out, err
 
 
-# -----------------------------------------------------------------------------
-@dumpArgs
-def rmdir(targetfolder) -> tuple:
-    """Remove a folder from the remote device.
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def listdir() -> list:
+#     """Get a list of files from the connected device
+#
+#     :return: list of filenames
+#     """
+#     out, err = ampy("ls")
+#     if err:
+#         print(f"ERROR: {err}")
+#         return []
+#
+#     ret_list = out.split()
+#     debug(f"listdir() {ret_list=}")
+#     return ret_list
 
-    :param targetfolder: Foldr to remove
-    :return: tuple of output and error messages
-    """
 
-    print(f"Removing folder {targetfolder}")
-    out, err = ampy("rmdir", targetfolder)
-    return out, err
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def remote_run(targetfile) -> tuple:
+#     """Run the given file on the connected device.
+#
+#     :param targetfile: The file to run
+#     :return: tuple of stdout and stderr messages
+#
+#     Note: The file must already exist
+#     """
+#     print(f"Start runing {targetfile}")
+#     out, err = ampy("run", targetfile)
+#     return out, err
+
+
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def rm(targetfile) -> tuple:
+#     """Remove/Delete the given file from the connected device
+#
+#     :param targetfile: The file to remove
+#     :return: tuple of stdout and stderr messages
+#     """
+#     print(f"Removing {targetfile}")
+#     out, err = ampy("rm", targetfile)
+#     return out, err
+
+
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def mkdir(targetfolder) -> tuple:
+#     """Create the given folder/directory on the connected device
+#
+#     :param targetfolder: The folder to create
+#     :return: tuple of stdout and stderr messages
+#     """
+#
+#     print(f"Creating folder {targetfolder}")
+#     out, err = ampy("mkdir", targetfolder)
+#     return out, err
+#
+#
+# # -----------------------------------------------------------------------------
+# @dumpArgs
+# def rmdir(targetfolder) -> tuple:
+#     """Remove a folder from the remote device.
+#
+#     :param targetfolder: Foldr to remove
+#     :return: tuple of output and error messages
+#     """
+#
+#     print(f"Removing folder {targetfolder}")
+#     out, err = ampy("rmdir", targetfolder)
+#     return out, err
 
 
 # -----------------------------------------------------------------------------
@@ -337,4 +337,3 @@ if __name__ == "__main__":
 
     clear_debug_window()
     print(get_available_serial_ports(verbose=True, usb=True))
-    listdir()

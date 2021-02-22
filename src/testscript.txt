@@ -1,5 +1,0 @@
-ls
-mkdir testdir
-ls
-rmdir testdir
-dir

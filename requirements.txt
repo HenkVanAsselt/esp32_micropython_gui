@@ -6,13 +6,15 @@ pyserial
 pylint
 ConfigArgParse
 PySide2
+PyQT5
+PyQt5Designer
+
 
 # To create an installer / .exe
 pyinstaller
 
-# For ESP32 logic
-adafruit-ampy
-shell49
+# Color output support
+colorama
 
 # For documentation:
 Sphinx

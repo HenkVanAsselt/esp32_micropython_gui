@@ -9,8 +9,10 @@ import time
 import serial   # type: ignore
 
 
-from PySide2 import QtGui, QtCore
-from PySide2.QtWidgets import QTextEdit, QWidget, QApplication, QVBoxLayout
+# from PySide2 import QtGui, QtCore
+# from PySide2.QtWidgets import QTextEdit, QWidget, QApplication, QVBoxLayout
+from PyQt5 import QtGui, QtCore
+from PyQt5.QtWidgets import QTextEdit, QWidget, QApplication, QVBoxLayout
 
 from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
 
@@ -83,8 +85,8 @@ class SerialTerminalWidget(QWidget):
     """Main Widget.
     """
 
-    # text_update = QtCore.pyqtSignal(str)  # QT5
-    text_update = QtCore.Signal(str)        # PySide2
+    text_update = QtCore.pyqtSignal(str)  # QT5
+    # text_update = QtCore.Signal(str)        # PySide2
 
     def __init__(self, *args):
         """Initialize the serial terminal widget

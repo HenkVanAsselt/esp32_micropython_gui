@@ -22,6 +22,7 @@
 # THE SOFTWARE.
 ##
 import argparse
+import cmd
 import glob
 import io
 import logging
@@ -29,12 +30,7 @@ import os
 import platform
 import sys
 import tempfile
-import pathlib
 
-
-# 3rd party imports
-import cmd2                 # type: ignore
-from cmd2 import style, fg, bg, CommandResult
 import colorama
 import serial
 
@@ -46,31 +42,14 @@ from mp.mpfexp import RemoteIOError
 from mp.pyboard import PyboardError
 from mp.tokenizer import Tokenizer
 
-from lib.helper import debug, dumpArgs
 
-class MpFileShell(cmd2.Cmd):
-
-    # Define the help categories
-    CMD_CAT_CONNECTING = "Connections"
-    CMD_CAT_FILES = "Files and folders"
-    CMD_CAT_EDIT = "Edit settings"
-    CMD_CAT_INFO = "Information"
-    CMD_CAT_DEBUG = "Debug and test"
-    CMD_CAT_REBOOT = "Reboot related commands"
-    CMD_CAT_RUN = "Execution commands"
-
+class MpFileShell(cmd.Cmd):
     def __init__(self, color=False, caching=False, reset=False):
-
-        startup_script = os.path.join(os.path.dirname(__file__), '.esp32clirc')
-        super().__init__(multiline_commands=['echo'], startup_script=startup_script,
-                         persistent_history_file='cmd2_history.dat')
-
         if color:
             colorama.init()
-            cmd2.Cmd.__init__(self, stdout=colorama.initialise.wrapped_stdout, startup_script=startup_script,
-                         persistent_history_file='cmd2_history.dat')
+            cmd.Cmd.__init__(self, stdout=colorama.initialise.wrapped_stdout)
         else:
-            cmd2.Cmd.__init__(self)
+            cmd.Cmd.__init__(self)
 
         if platform.system() == "Windows":
             self.use_rawinput = False
@@ -119,23 +98,21 @@ class MpFileShell(cmd2.Cmd):
 
         if self.color:
             self.prompt = (
-                # colorama.Fore.BLUE
-                colorama.Fore.LIGHTGREEN_EX
-                + "cli32 ["
-                + colorama.Fore.LIGHTGREEN_EX
+                colorama.Fore.BLUE
+                + "mpfs ["
+                + colorama.Fore.YELLOW
                 + pwd
-                # + colorama.Fore.BLUE
-                + colorama.Fore.LIGHTGREEN_EX
+                + colorama.Fore.BLUE
                 + "]> "
                 + colorama.Fore.RESET
             )
         else:
-            self.prompt = "cli32 [" + pwd + "]> "
+            self.prompt = "mpfs [" + pwd + "]> "
 
     def __error(self, msg):
 
         if self.color:
-            print("\n" + colorama.Fore.LIGHTRED_EX + msg + colorama.Fore.RESET + "\n")
+            print("\n" + colorama.Fore.RED + msg + colorama.Fore.RESET + "\n")
         else:
             print("\n" + msg + "\n")
 
@@ -164,6 +141,7 @@ class MpFileShell(cmd2.Cmd):
             self.__error("Failed to open: %s" % port)
         return False
 
+
     def __disconnect(self):
 
         if self.fe is not None:
@@ -179,6 +157,7 @@ class MpFileShell(cmd2.Cmd):
         if self.fe is None:
             self.__error("Not connected to device. Use 'open' first.")
             return False
+
         return True
 
     def __parse_file_names(self, args):
@@ -189,11 +168,12 @@ class MpFileShell(cmd2.Cmd):
             self.__error("Invalid filename given: %s" % rest)
         else:
             return [token.value for token in tokens]
+
         return None
 
-    @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_exit(self, args):
-        """Exit this shell.
+        """exit
+        Exit this shell.
         """
         self.__disconnect()
 
@@ -201,7 +181,6 @@ class MpFileShell(cmd2.Cmd):
 
     do_EOF = do_exit
 
-    @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_open(self, args):
         """open <TARGET>
         Open connection to device with given target. TARGET might be:
@@ -228,22 +207,22 @@ class MpFileShell(cmd2.Cmd):
                 args = "ser:/dev/" + args
 
         ret = self.__connect(args)
-        debug(f"{ret=}")
+        return
 
     def complete_open(self, *args):
         ports = glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")
         return [i[5:] for i in ports if i[5:].startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_close(self, args):
-        """Close connection to device.
+        """close
+        Close connection to device.
         """
 
         self.__disconnect()
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_ls(self, args):
-        """List remote files.
+        """ls
+        List remote files.
         """
 
         if self.__is_open():
@@ -280,14 +259,13 @@ class MpFileShell(cmd2.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_pwd(self, args):
-        """Print current remote directory.
+        """pwd
+        Print current remote directory.
         """
         if self.__is_open():
             print(self.fe.pwd())
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_cd(self, args):
         """cd <TARGET DIR>
         Change current remote directory to given target.
@@ -317,7 +295,6 @@ class MpFileShell(cmd2.Cmd):
 
         return [i for i in files if i.startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_md(self, args):
         """md <TARGET DIR>
         Create new remote directory.
@@ -337,9 +314,9 @@ class MpFileShell(cmd2.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_lls(self, args):
-        """List files in current local directory.
+        """lls
+        List files in current local directory.
         """
 
         files = os.listdir(".")
@@ -362,7 +339,6 @@ class MpFileShell(cmd2.Cmd):
                     print("       %s" % f)
         print("")
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_lcd(self, args):
         """lcd <TARGET DIR>
         Change current local directory to given target.
@@ -387,14 +363,13 @@ class MpFileShell(cmd2.Cmd):
         dirs = [o for o in os.listdir(".") if os.path.isdir(os.path.join(".", o))]
         return [i for i in dirs if i.startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_lpwd(self, args):
-        """lpwd = Print current local directory.
+        """lpwd
+        Print current local directory.
         """
 
         print(os.getcwd())
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_put(self, args):
         """put <LOCAL FILE> [<REMOTE FILE>]
         Upload local file. If the second parameter is given,
@@ -432,7 +407,6 @@ class MpFileShell(cmd2.Cmd):
         files = [o for o in os.listdir(".") if os.path.isfile(os.path.join(".", o))]
         return [i for i in files if i.startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_mput(self, args):
         """mput <SELECTION REGEX>
         Upload all local files that match the given regular expression.
@@ -451,15 +425,12 @@ class MpFileShell(cmd2.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_get(self, args):
         """get <REMOTE FILE> [<LOCAL FILE>]
         Download remote file. If the second parameter is given,
         its value is used for the local file name. Otherwise the
         locale file will be named the same as the remote file.
         """
-
-        debug(f"do_get() {args=}")
 
         if not len(args):
             self.__error("Missing arguments: <REMOTE FILE> [<LOCAL FILE>]")
@@ -487,7 +458,6 @@ class MpFileShell(cmd2.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_mget(self, args):
         """mget <SELECTION REGEX>
         Download all remote files that match the given regular expression.
@@ -515,7 +485,6 @@ class MpFileShell(cmd2.Cmd):
 
         return [i for i in files if i.startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_rm(self, args):
         """rm <REMOTE FILE or DIR>
         Delete a remote file or directory.
@@ -541,7 +510,6 @@ class MpFileShell(cmd2.Cmd):
             except PyboardError:
                 self.__error("Unable to send request to %s" % self.fe.sysname)
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_mrm(self, args):
         """mrm <SELECTION REGEX>
         Delete all remote files that match the given regular expression.
@@ -568,7 +536,6 @@ class MpFileShell(cmd2.Cmd):
 
         return [i for i in files if i.startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_cat(self, args):
         """cat <REMOTE FILE>
         Print the contents of a remote file.
@@ -592,7 +559,6 @@ class MpFileShell(cmd2.Cmd):
 
     complete_cat = complete_get
 
-    @cmd2.with_category(CMD_CAT_RUN)
     def do_exec(self, args):
         """exec <STATEMENT>
         Execute a Python statement on remote.
@@ -618,9 +584,9 @@ class MpFileShell(cmd2.Cmd):
             except PyboardError as e:
                 self.__error(str(e))
 
-    @cmd2.with_category(CMD_CAT_RUN)
     def do_repl(self, args):
-        """repl = Enter Micropython REPL.
+        """repl
+        Enter Micropython REPL.
         """
 
         import serial
@@ -683,7 +649,6 @@ class MpFileShell(cmd2.Cmd):
                 self.__set_prompt_path()
             print("")
 
-    @cmd2.with_category(CMD_CAT_RUN)
     def do_mpyc(self, args):
         """mpyc <LOCAL PYTHON FILE>
         Compile a Python file into byte-code by using mpy-cross (which needs to be in the path).
@@ -714,7 +679,6 @@ class MpFileShell(cmd2.Cmd):
         ]
         return [i for i in files if i.startswith(args[0])]
 
-    @cmd2.with_category(CMD_CAT_RUN)
     def do_putc(self, args):
         """mputc <LOCAL PYTHON FILE> [<REMOTE FILE>]
         Compile a Python file into byte-code by using mpy-cross (which needs to be in the
@@ -757,75 +721,6 @@ class MpFileShell(cmd2.Cmd):
 
     complete_putc = complete_mpyc
 
-    # ===========================================================================
-    @cmd2.with_category(CMD_CAT_FILES)
-    def do_edit(self, statement):
-        """Edit a file on the remote device.
-
-        First check if the file is actually there.
-        If so, get it as a local file.
-        Edit it, and put it back when it was changed.
-        """
-
-        filename = statement.args
-        # if not filename.startswith('/'):
-        #     self.perror(f"Error: {filename} does not start with an '/'")
-        #     return
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-
-            local_filename = os.path.join(temp_dir, os.path.basename(filename))
-            debug(f"{local_filename=}")
-
-            print(f"Retrieving {filename}")
-            try:
-                self.fe.get(filename, local_filename)
-            except IOError as e:
-                self.__error(str(e))
-                return
-
-            oldstat = os.stat(local_filename)
-
-            # editor = pathlib.Path("C:/Program Files/Notepad++/notepad++.exe")
-            editor = pathlib.Path(r"C:\Users\HenkA\AppData\Local\Programs\Microsoft VS Code\Code.exe")
-            cmdstr = f'"{editor}" "{local_filename}"'
-            esp32common.local_run(cmdstr)
-
-            newstat = os.stat(local_filename)
-
-            if oldstat != newstat:
-                # The file was changed, so write it back
-                print(f"Updating {filename}")
-                try:
-                    self.fe.put(local_filename, filename)
-                except IOError as e:
-                    self.__error(str(e))
-                    print("ERROR:", str(e))
-            else:
-                debug(f"{local_filename} was not modified")
-
-    @cmd2.with_category(CMD_CAT_FILES)
-    def do_ledit(self, statement):
-        """Locally edit a file in the local source folder on the PC.
-
-        If it is an absolute path is given, then use the absolute path.
-        If not, then handle the filename as part of the defined micropython source folder
-        """
-
-        debug(f"edit {statement=}")
-        filename = statement.args       # Just the raw argument string
-
-        # If the given filename is not absolute, then assume it is located
-        # in the current micropython sourcefolder
-        if not pathlib.Path(filename).is_absolute():
-            sourcefolder = esp32common.get_sourcefolder()
-            sourcefile = sourcefolder.joinpath(filename)
-        else:
-            sourcefile = filename
-
-        editor = pathlib.Path("C:/Program Files/Notepad++/notepad++.exe")
-        cmdstr = f'"{editor}" "{sourcefile}"'
-        esp32common.local_run(cmdstr)
 
 def main():
 
@@ -911,12 +806,6 @@ def main():
     if args.board is not None:
         mpfs.do_open(args.board)
 
-    if not args.board:
-        # Try to find a suitable port and open it
-        port, desc = esp32common.get_comport()
-        print(f"Automatic trying to use {port=}")
-        mpfs.do_open(port)
-
     if args.command is not None:
 
         for acmd in " ".join(args.command).split(";"):
@@ -952,16 +841,9 @@ def main():
         try:
             mpfs.cmdloop()
         except KeyboardInterrupt:
-            print("keyboard interrupt")
+            print("")
 
 
 if __name__ == "__main__":
-
-    import lib.helper
-    import esp32common
-
-    lib.helper.clear_debug_window()
-    port, desc = esp32common.get_comport()
-    debug(f"{port=}, {desc=}")
 
     sys.exit(main())

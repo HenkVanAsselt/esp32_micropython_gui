@@ -12,10 +12,15 @@ ESP32 MicroPython GUI
 
    esp32cli
    esp32gui
-   
    esp32common
-   
    serialterminalwidget
+
+
+.. toctree::
+   :maxdepth: 3
+   :caption: MPFShell
+
+   mpfshell
 
 
 Indices and tables

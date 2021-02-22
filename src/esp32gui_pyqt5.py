@@ -4,9 +4,9 @@
 
 import sys
 import subprocess
-from PySide2 import QtCore, QtGui
-from PySide2.QtWidgets import QApplication, QMainWindow
-from PySide2.QtGui import QTextCursor
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtGui import QTextCursor
 
 # Local imports
 import param
@@ -14,54 +14,16 @@ from esp32shell_qt_design import Ui_MainWindow
 from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
 import esp32common
 
-import esp32cli_new
-
+import esp32cli
+import repl_gui
 
 MODE_COMMAND = 1
 MODE_REPL = 2
 
-
-# -----------------------------------------------------------------------------
-def localcmd(*args) -> tuple:
-    """Run a local command with the given arguments
-
-    :param args: Variable length of arguments
-    :returns: tuple of stdout and stderr text
-    """
-
-    debug(f"localcmd {args=}")
-    arglist = ['cmd']
-    for arg in args:
-        arglist.extend(arg)
-    debug(f"{arglist=}")
-
-    proc = subprocess.Popen(
-        arglist, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
-    )
-    out, err = proc.communicate()
-    return out.decode(), err.decode()
-
-
-# -----------------------------------------------------------------------------
-def rshell(port, *args) -> tuple:
-    """Run an rshell.exe command with the given arguments
-
-    :param port: Com port to use (string)
-    :param args: Variable length of arguments
-    :returns: tuple of stdout and stderr text
-    """
-
-    command_list = ["rshell", "-p", port, "repl"]
-    for arg in args:
-        command_list.append(arg)
-
-    # proc = subprocess.Popen(
-    #     command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    # )
-    # out, err = proc.communicate()
-
-    subprocess.Popen(command_list)
-    return "", ""
+# REPL modes:
+INTERNAL = 1
+PUTTY = 2
+MINITERM = 3
 
 
 # -----------------------------------------------------------------------------
@@ -72,10 +34,11 @@ def putty(port) -> tuple:
     :returns: tuple of stdout and stderr text
     """
 
-    putty_command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
+    command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
+    debug(f"Calling {' '.join(command_list)}")
 
     proc = subprocess.Popen(
-        putty_command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     out, err = proc.communicate(input=b"\r\n")
     return out.decode(), err.decode()
@@ -87,12 +50,21 @@ def miniterm(port) -> tuple:
 
     :param port: Com port to use (string)
     :returns: tuple of stdout and stderr text
+
+    20210218, HenkA: Does not work yet, does not react on CTRL+C or CTRL+D
     """
 
     command_list = ["pyserial-miniterm.exe", port, "115200"]
+    debug(f"Calling {' '.join(command_list)}")
 
-    subprocess.run(command_list, shell=True)
-    return "", ""
+    # subprocess.run(command_list, shell=True)
+    # return "", ""
+
+    proc = subprocess.Popen(
+        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    out, err = proc.communicate(input=b"\r\n")
+    return out.decode(), err.decode()
 
 
 # -----------------------------------------------------------------------------
@@ -100,7 +72,8 @@ class MainWindow(QMainWindow):
     """QT Main Window
     """
 
-    text_update = QtCore.Signal(str)        # PySide2
+    # text_update = QtCore.Signal(str)        # PySide2
+    text_update = QtCore.pyqtSignal(str)
 
     def __init__(self):
         """Intialize the QT window
@@ -127,9 +100,10 @@ class MainWindow(QMainWindow):
         self.config = esp32common.readconfig('esp32cli.ini')
         param.config = self.config
 
-        port, desc = esp32common.get_comport()
+        port, desc = esp32common.get_active_comport()
         self.config['com']['port'] = port
         self.config['com']['desc'] = desc
+        debug(f"Active com port is {port}")
 
         # If neccessary, set properties of some elements
         self.set_ui_properties()
@@ -142,10 +116,15 @@ class MainWindow(QMainWindow):
         sys.stderr = self
         debug(f"now sys.stdout is {sys.stdout=}")
         self.text_update.connect(self.append_text) # noqa # Connect text update to handler
-
         self.ui.command_input.setFocus()
 
-        self.cmdlineapp = esp32cli_new.MpFileShell()
+        # Prepare the repl window, but do not open a connection yet.
+        # This should only be done when repl becomes active.
+        self.repl_connection = repl_gui.REPLConnection(port, 115200)
+        self.ui.ReplPane.set_connection(self.repl_connection)
+        self.repl_connection.data_received.connect(self.ui.ReplPane.process_tty_data)
+
+        self.cmdlineapp = esp32cli.MpFileShell()
 
     # -------------------------------------------------------------------------
     # @dumpArgs
@@ -159,7 +138,7 @@ class MainWindow(QMainWindow):
 
     # -------------------------------------------------------------------------
     # @dumpArgs
-    def append_text(self, text):
+    def append_text(self, text) -> None:
         """Text display update handler.
 
         :param text: Text to display
@@ -179,7 +158,7 @@ class MainWindow(QMainWindow):
         self.ui.text_output.setTextCursor(cur)  # Update visible cursor
 
     @staticmethod
-    def flush(self):
+    def flush(self) -> None:
         """Handle sys.stdout.flush: do nothing
 
         :return: Nothing
@@ -187,7 +166,7 @@ class MainWindow(QMainWindow):
         pass
 
     @staticmethod
-    def isatty():
+    def isatty() -> bool:
         """ to check if the given file descriptor is open and connected to tty(-like) device or not
 
         :return: True
@@ -195,74 +174,106 @@ class MainWindow(QMainWindow):
         return False
 
     @staticmethod
-    def fileno():
+    def fileno() -> int:
         """Return -1 as the fileno, to satisfy cmd2 redirection.
         @todo: This does not work for cmd2 !shellcommands yet.
         """
         return -1
 
     # -------------------------------------------------------------------------
-    @dumpFuncname
-    def change_to_command_mode(self):
-        """Switch to command mode.
-        """
-        debug("radiobox command clicked")
-        if not self.mode == MODE_COMMAND:
-            self.change_to_mode(MODE_COMMAND)
-
-    # -------------------------------------------------------------------------
-    @dumpFuncname
-    def change_to_repl_mode(self):
-        """Switch to REPL mode.
-        """
-        debug("radiobox repl clicked")
-        if not self.mode == MODE_REPL:
-            self.change_to_mode(MODE_REPL)
-
-    # -------------------------------------------------------------------------
-    @dumpFuncname
-    def change_to_mode(self, new_mode=None):
-        """Handle the switch from repl mode to command mode and visa versa.
+    def change_radiobuttons_to_current_mode(self, mode: int) -> None:
+        """Set radioboxes to current mode
+        :returns: Nothing
         """
 
-        if not new_mode:
+        debug("Changing radio box settings")
 
-            if self.ui.radioButton_commandmode.isChecked():
-                debug("commandmode is checked")
-                new_mode = MODE_COMMAND
-
-            elif self.ui.radioButton_replmode.isChecked():
-                debug("replmode is checked")
-                new_mode = MODE_REPL
-
-        if self.mode == MODE_REPL and new_mode == MODE_COMMAND:
-            debug("Switching to COMMAND mode")
+        if self.mode == MODE_COMMAND:
             self.ui.radioButton_replmode.setChecked(False)
             self.ui.radioButton_commandmode.setChecked(True)
-            self.ui.Repl.stop_repl()
-            self.ui.command_input.setFocus()
-            debug(f"now sys.stdout was {sys.stdout=}")
-            sys.stdout = self
-            debug(f"now sys.stdout is {sys.stdout=}")
-            self.mode = MODE_COMMAND
-            print("Switched to COMMAND mode\n")
+            return
 
-        elif self.mode == MODE_COMMAND and new_mode == MODE_REPL:
-            debug("Switching to REPL mode")
-            self.ui.radioButton_commandmode.setChecked(False)
+        if self.mode == MODE_REPL:
             self.ui.radioButton_replmode.setChecked(True)
-            self.ui.Repl.start_repl()
-            self.ui.Repl.textbox.setFocus()
-            self.ui.Repl.textbox.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
-            self.mode = MODE_REPL
-            print("Switched to REPL mode\n")
+            self.ui.radioButton_commandmode.setChecked(False)
+            return
 
+    # -------------------------------------------------------------------------
+    def change_to_command_mode(self) -> int:
+        """Switch from serial repl to serial command mode.
+        :returns: New mode
+        """
+
+        debug("change_to_command_mode()")
+        if self.mode == MODE_COMMAND:
+            debug("Already in COMMAND mode")
+            return self.mode
+
+        self.mode = MODE_COMMAND
+        self.change_radiobuttons_to_current_mode(self.mode)
+
+        # Stop the REPL connection if that is active
+        if self.repl_connection.serial:
+            debug("self.repl_connection.serial is True. Closing repl_connection")
+            self.repl_connection.close()
+
+        # Open the serial connection for the commandline mode
+        self.cmdlineapp.onecmd_plus_hooks("open com4")
+
+        self.ui.command_input.setFocus()
+        debug(f"now sys.stdout was {sys.stdout=}")
+        sys.stdout = self
+        debug(f"now sys.stdout is {sys.stdout=}")
+
+        return self.mode
+
+    # -------------------------------------------------------------------------
+    def change_to_repl_mode(self, method=INTERNAL) -> int:
+        """Switch to REPL mode.
+        :param method: The method to use (internal, pytty or miniterm)
+        :returns: New method
+        """
+        debug("change_to_repl_moded")
+        if self.mode == MODE_REPL:
+            debug("Already in REPL mode")
+            return self.mode
+
+        # Close the serial connection for the commandline mode
+        self.cmdlineapp.onecmd_plus_hooks("close")
+
+        self.mode = MODE_REPL
+        self.change_radiobuttons_to_current_mode(self.mode)
+
+        if method == INTERNAL:
+            # Stop the REPL connection if that is active
+            if not self.repl_connection.is_connected:
+                debug("Opening repl connection")
+                self.repl_connection.open()
+            else:
+                debug("WARNING: repl connection was already active")
+            self.ui.ReplPane.setFocus()
+            # self.ui.ReplPane.textbox.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
+            self.ui.ReplPane.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
+            self.repl_connection.send_interrupt()
+            return self.mode
+        elif method == PUTTY:
+            putty("COM4:")
+            self.show_text("Putty has been terminated\n")
+            self.mode = MODE_COMMAND
+            return self.mode
+        elif method == MINITERM:
+            miniterm("COM4")
+            self.show_text("Miniterm has been terminated\n")
+            self.mode = MODE_COMMAND
+            return self.mode
         else:
-            debug(f"ERROR, unknown mode {new_mode}")
+            print(f"Unknown repl {method=}")
+            self.mode = MODE_COMMAND
+            return self.mode
 
     # -------------------------------------------------------------------------
     @dumpFuncname
-    def get_ui_properties(self):
+    def get_ui_properties(self) -> None:
         """Get the values from the UI textfields, checkboxes and radiobuttons"""
 
         # Save GUI setting
@@ -272,8 +283,6 @@ class MainWindow(QMainWindow):
         # Save the (modified configuration file)
         esp32common.saveconfig(self.config)
 
-        return
-
     # -------------------------------------------------------------------------
     @dumpFuncname
     def set_ui_properties(self) -> bool:
@@ -282,7 +291,7 @@ class MainWindow(QMainWindow):
         try:
 
             # Main window properties
-            self.setWindowTitle("ESP32 microPython GUI/Shell")
+            self.setWindowTitle("ESP32 microPython PyQT5 GUI/Shell")
 
             # Show current uPython source path
             srcpath = self.config['src']['srcpath']
@@ -301,7 +310,7 @@ class MainWindow(QMainWindow):
 
     # -------------------------------------------------------------------------
     @dumpArgs
-    def show_result(self, out: str, err: str):
+    def show_result(self, out: str, err: str) -> None:
         """Print the stdout and stderr strings in the output window.
         :param out: Stdout string or another normal output string
         :param err: Stderr string or another error message
@@ -314,22 +323,21 @@ class MainWindow(QMainWindow):
         if err:
             self.ui.text_output.append("ERROR: ")
             self.ui.text_output.append(err)
-
-        return
+            self.ui.text_output.update()
 
     # -------------------------------------------------------------------------
-    def show_text(self, out: str):
+    def show_text(self, text: str) -> None:
         """Print the stdout string in the output window.
-        :param out: Stdout string or another normal output string
+        :param text: Stdout string or another normal output string
         :returns: Nothing
         """
 
-        if out:
-            self.ui.text_output.append(out)
-        return
+        if text:
+            self.ui.text_output.append(text)
+            self.ui.text_output.update()
 
     # -------------------------------------------------------------------------
-    def do_clicked_command(self, item):
+    def do_clicked_command(self, item) -> None:
         """Execute the command which was clicked on.
         :param item: The item which was clicked. The command to execute is in the text of that item.
         :returns: Nothing
@@ -339,7 +347,8 @@ class MainWindow(QMainWindow):
         self.do_command(cmd_str=cmd)
 
     # -------------------------------------------------------------------------
-    def do_command(self, cmd_str=None):
+    @dumpArgs
+    def do_command(self, cmd_str=None) -> None:
         """Execute the given command
         :param cmd_str: The command to execute
         :returns: Nothing
@@ -352,6 +361,7 @@ class MainWindow(QMainWindow):
         # At the end, the last command will be added to a list of commands.
 
         if not self.mode == MODE_COMMAND:
+            debug("We were not in command mode, switching to command mode now")
             self.change_to_command_mode()
 
         if not cmd_str:
@@ -359,7 +369,7 @@ class MainWindow(QMainWindow):
 
         if cmd_str == "cls":
             self.ui.text_output.setText("")
-            self.ui.Repl.textbox.setText("")
+            self.ui.ReplPane.textbox.setText("")
         elif cmd_str == "repl":
             self.change_to_repl_mode()
         elif cmd_str == "cmd":

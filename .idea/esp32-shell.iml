@@ -6,9 +6,10 @@
       <sourceFolder url="file://$MODULE_DIR$/src/lib" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/doc" />
       <excludeFolder url="file://$MODULE_DIR$/src/.pytest_cache" />
-      <excludeFolder url="file://$MODULE_DIR$/src/archive" />
       <excludeFolder url="file://$MODULE_DIR$/src/lib/.pytest_cache" />
       <excludeFolder url="file://$MODULE_DIR$/src/lib/tests" />
+      <excludeFolder url="file://$MODULE_DIR$/src/archive" />
+      <excludeFolder url="file://$MODULE_DIR$/archive" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8 (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
