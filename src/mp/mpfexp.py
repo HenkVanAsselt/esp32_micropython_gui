@@ -27,9 +27,11 @@ import getpass
 import logging
 import os
 import posixpath  # force posix-style slashes
+import pathlib
 import re
 import sre_constants
 import subprocess
+import fnmatch
 
 from mp.conbase import ConError
 from mp.conserial import ConSerial
@@ -39,13 +41,15 @@ from mp.pyboard import Pyboard
 from mp.pyboard import PyboardError
 from mp.retry import retry
 
+from lib.helper import debug
+
 
 def _was_file_not_existing(exception):
     """
     Helper function used to check for ENOENT (file doesn't exist),
     ENODEV (device doesn't exist, but handled in the same way) or
     EINVAL errors in an exception. Treat them all the same for the
-    time being. TODO: improve and nuance.
+    time being.
 
     :param  exception:      exception to examine
     :return:                True if non-existing
@@ -218,6 +222,8 @@ class MpFileExplorer(Pyboard):
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def rm(self, target):
 
+        debug(f"mpfexp.rm() {target=}")
+
         try:
             # 1st try to delete it as a file
             self.eval("uos.remove('%s')" % (self._fqn(target)))
@@ -253,11 +259,16 @@ class MpFileExplorer(Pyboard):
                 self.rm(f)
 
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
-    def put(self, src, dst=None):
+    def put(self, src, dst=None) -> None:
 
-        f = open(src, "rb")
-        data = f.read()
-        f.close()
+        debug(f"mpfexp.put {src=} {dst=}")
+
+        with open(src, "rb") as f:
+            data = f.read()
+
+        if not data:
+            print(f"ERROR: No data found in file {src}")
+            return
 
         if dst is None:
             dst = src
@@ -285,21 +296,21 @@ class MpFileExplorer(Pyboard):
                 raise e
 
     def mput(self, src_dir, pat, verbose=False):
+        """Put multiple files from the given source folder to the current folder on the device.
 
-        try:
+        :param src_dir: The folder with the sourcefiles
+        :param pat: The filename pattern
+        :param verbose: If true, display the progress.
+        """
 
-            find = re.compile(pat)
-            files = os.listdir(src_dir)
+        files = pathlib.Path(src_dir).glob(pat)
+        debug(f"mput() {files=}")
 
-            for f in files:
-                if os.path.isfile(f) and find.match(f):
-                    if verbose:
-                        print(" * put %s" % f)
+        for f in files:
+            if verbose:
+                print(" * put %s" % f)
+            self.put(f, f.name)
 
-                    self.put(posixpath.join(src_dir, f), f)
-
-        except sre_constants.error as e:
-            raise RemoteIOError("Error in regular expression: %s" % e)
 
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def get(self, src, dst=None):
@@ -310,43 +321,55 @@ class MpFileExplorer(Pyboard):
         if dst is None:
             dst = src
 
-        f = open(dst, "wb")
+        with open(dst, "wb") as f:
+            try:
 
-        try:
+                self.exec_("f = open('%s', 'rb')" % self._fqn(src))
+                ret = self.exec_(
+                    "while True:\r\n"
+                    "  c = ubinascii.hexlify(f.read(%s))\r\n"
+                    "  if not len(c):\r\n"
+                    "    break\r\n"
+                    "  sys.stdout.write(c)\r\n" % self.BIN_CHUNK_SIZE
+                )
 
-            self.exec_("f = open('%s', 'rb')" % self._fqn(src))
-            ret = self.exec_(
-                "while True:\r\n"
-                "  c = ubinascii.hexlify(f.read(%s))\r\n"
-                "  if not len(c):\r\n"
-                "    break\r\n"
-                "  sys.stdout.write(c)\r\n" % self.BIN_CHUNK_SIZE
-            )
+                self.exec_("f.close()")
 
-            self.exec_("f.close()")
+            except PyboardError as e:
+                if _was_file_not_existing(e):
+                    raise RemoteIOError("Failed to read file: %s" % src)
+                else:
+                    raise e
 
-        except PyboardError as e:
-            if _was_file_not_existing(e):
-                raise RemoteIOError("Failed to read file: %s" % src)
-            else:
-                raise e
-
-        f.write(binascii.unhexlify(ret))
-        f.close()
+            f.write(binascii.unhexlify(ret))
 
     def mget(self, dst_dir, pat, verbose=False):
 
         try:
 
+            debug(f"mpfexp.mget {pat=}")
             files = self.ls(add_dirs=False)
-            find = re.compile(pat)
+            debug(f"mpfexp.mget {files=}")
+
+            # find = re.compile(pat)
+            # debug(f"mpfexp.mget {find=}")
+
+            # for f in files:
+            #     if find.match(f):
+            #         if verbose:
+            #             print(" * get %s" % f)
+            #         self.get(f, dst=posixpath.join(dst_dir, f))
+            #     else:
+            #         debug(f"{f} is no match")
 
             for f in files:
-                if find.match(f):
+                if fnmatch.fnmatch(f, pat):
                     if verbose:
                         print(" * get %s" % f)
-
                     self.get(f, dst=posixpath.join(dst_dir, f))
+                else:
+                    # debug(f"{f} is no match")
+                    pass
 
         except sre_constants.error as e:
             raise RemoteIOError("Error in regular expression: %s" % e)
@@ -403,7 +426,7 @@ class MpFileExplorer(Pyboard):
                     break
 
                 self.exec_("f.write(ubinascii.unhexlify('%s'))" % c.decode("utf-8"))
-                data = data[self.BIN_CHUNK_SIZE :]
+                data = data[self.BIN_CHUNK_SIZE:]
 
             self.exec_("f.close()")
 
@@ -457,12 +480,15 @@ class MpFileExplorer(Pyboard):
 
     def mpy_cross(self, src, dst=None):
 
+        debug(f"mpy_cross() {src=} {dst=}")
+
         if dst is None:
             return_code = subprocess.call("mpy-cross %s" % (src), shell=True)
         else:
             return_code = subprocess.call("mpy-cross -o %s %s" % (dst, src), shell=True)
 
-        if return_code != 0:
+        debug(f"After mpy-cross, {return_code=}")
+        if return_code:
             raise IOError("Filed to compile: %s" % src)
 
 

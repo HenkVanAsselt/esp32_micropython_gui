@@ -128,6 +128,7 @@ class MpFileShell(cmd.Cmd):
             else:
                 self.fe = MpFileExplorer(port, self.reset)
             print("Connected to %s" % self.fe.sysname)
+            self.port = port
             self.__set_prompt_path()
             return True
         except PyboardError as e:
@@ -140,7 +141,6 @@ class MpFileShell(cmd.Cmd):
             logging.error(e)
             self.__error("Failed to open: %s" % port)
         return False
-
 
     def __disconnect(self):
 
@@ -171,7 +171,7 @@ class MpFileShell(cmd.Cmd):
 
         return None
 
-    def do_exit(self, args):
+    def do_exit(self, _args):
         """exit
         Exit this shell.
         """
@@ -206,21 +206,20 @@ class MpFileShell(cmd.Cmd):
             else:
                 args = "ser:/dev/" + args
 
-        ret = self.__connect(args)
+        self.__connect(args)
         return
 
-    def complete_open(self, *args):
+    def complete_open(*args):
         ports = glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")
         return [i[5:] for i in ports if i[5:].startswith(args[0])]
 
-    def do_close(self, args):
+    def do_close(self, _args):
         """close
         Close connection to device.
         """
-
         self.__disconnect()
 
-    def do_ls(self, args):
+    def do_ls(self, _args):
         """ls
         List remote files.
         """
@@ -234,8 +233,8 @@ class MpFileShell(cmd.Cmd):
 
                 print("\nRemote files in '%s':\n" % self.fe.pwd())
 
-                for elem, type in files:
-                    if type == "F":
+                for elem, file_type in files:
+                    if file_type == "F":
                         if self.color:
                             print(
                                 colorama.Fore.CYAN
@@ -259,7 +258,7 @@ class MpFileShell(cmd.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
-    def do_pwd(self, args):
+    def do_pwd(self, _args):
         """pwd
         Print current remote directory.
         """
@@ -290,7 +289,8 @@ class MpFileShell(cmd.Cmd):
 
         try:
             files = self.fe.ls(add_files=False)
-        except Exception:
+        except Exception as err:
+            print(f"Exception: {err}")
             files = []
 
         return [i for i in files if i.startswith(args[0])]
@@ -314,7 +314,7 @@ class MpFileShell(cmd.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
-    def do_lls(self, args):
+    def do_lls(self, _args):
         """lls
         List files in current local directory.
         """
@@ -363,7 +363,7 @@ class MpFileShell(cmd.Cmd):
         dirs = [o for o in os.listdir(".") if os.path.isdir(os.path.join(".", o))]
         return [i for i in dirs if i.startswith(args[0])]
 
-    def do_lpwd(self, args):
+    def do_lpwd(self, _args):
         """lpwd
         Print current local directory.
         """
@@ -480,7 +480,8 @@ class MpFileShell(cmd.Cmd):
 
         try:
             files = self.fe.ls(add_dirs=False)
-        except Exception:
+        except Exception as err:
+            print(f"Exeption: {err}")
             files = []
 
         return [i for i in files if i.startswith(args[0])]
@@ -531,7 +532,8 @@ class MpFileShell(cmd.Cmd):
 
         try:
             files = self.fe.ls()
-        except Exception:
+        except Exception as err:
+            print(f"Exeption: {err}")
             files = []
 
         return [i for i in files if i.startswith(args[0])]
@@ -584,7 +586,7 @@ class MpFileShell(cmd.Cmd):
             except PyboardError as e:
                 self.__error(str(e))
 
-    def do_repl(self, args):
+    def do_repl(self, _args):
         """repl
         Enter Micropython REPL.
         """
@@ -630,7 +632,8 @@ class MpFileShell(cmd.Cmd):
 
             try:
                 self.repl.join(True)
-            except Exception:
+            except Exception as err:
+                print(f"Exeption: {err}")
                 pass
 
             self.repl.console.cleanup()
@@ -778,12 +781,12 @@ def main():
 
     args = parser.parse_args()
 
-    format = "%(asctime)s\t%(levelname)s\t%(message)s"
+    log_format = "%(asctime)s\t%(levelname)s\t%(message)s"
 
     if args.logfile is not None:
-        logging.basicConfig(format=format, filename=args.logfile, level=args.loglevel)
+        logging.basicConfig(format=log_format, filename=args.logfile, level=args.loglevel)
     else:
-        logging.basicConfig(format=format, level=logging.CRITICAL)
+        logging.basicConfig(format=log_format, level=logging.CRITICAL)
 
     logging.info("Micropython File Shell v%s started" % version.FULL)
     logging.info(

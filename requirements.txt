@@ -9,6 +9,9 @@ PySide2
 PyQT5
 PyQt5Designer
 
+# Micropython specific
+mpy-cross
+
 
 # To create an installer / .exe
 pyinstaller

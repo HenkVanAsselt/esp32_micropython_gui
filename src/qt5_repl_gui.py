@@ -35,8 +35,8 @@ from PyQt5.QtWidgets import QTextEdit, QMenu, QApplication, QMainWindow
 from PyQt5.QtSerialPort import QSerialPort
 
 from lib.helper import clear_debug_window, debug, dumpArgs
+from qt5_repl import REPLConnection
 
-from serial import Serial
 
 PANE_ZOOM_SIZES = {
     "xs": 8,
@@ -83,11 +83,9 @@ class MicroPythonREPLPane(QTextEdit):
         debug("intializing MircopythonREPLPane.")
         super().__init__(parent)
         self.connection = None
-        # self.setFont(Font().load())       # todo: reimplement this
         self.setAcceptRichText(False)
         self.setReadOnly(False)
         self.setUndoRedoEnabled(False)
-        # self.setContextMenuPolicy(Qt.CustomContextMenu)   # todo: reimplement this
         self.customContextMenuRequested.connect(self.context_menu)
         # The following variable maintains the position where we know
         # the device cursor is placed. It is initialized to the beginning
@@ -162,7 +160,7 @@ class MicroPythonREPLPane(QTextEdit):
         shift_down = data.modifiers() & Qt.ShiftModifier
         on_osx = platform.system() == "Darwin"
 
-        debug(f"{key=}")
+        # debug(f"{key=}")
         if key == Qt.Key_Return:
             # Move cursor to the end of document before sending carriage return
             tc.movePosition(QTextCursor.End, mode=QTextCursor.MoveAnchor)
@@ -215,7 +213,7 @@ class MicroPythonREPLPane(QTextEdit):
                 self.paste()
         else:
             self.delete_selection()
-            debug(f"Sending {data.text()=}")
+            # debug(f"Sending {data.text()=}")
             self.send(bytes(data.text(), "utf8"))
 
     def set_qtcursor_to_devicecursor(self):
@@ -399,144 +397,6 @@ class MicroPythonREPLPane(QTextEdit):
         Set the current zoom level given the "t-shirt" size.
         """
         self.set_font_size(PANE_ZOOM_SIZES[size])
-
-
-class REPLConnection(QObject):
-
-    serial = None
-    data_received = pyqtSignal(bytes)
-    connection_error = pyqtSignal(str)
-
-    def __init__(self, port, baudrate=115200):
-        debug("Initializing REPLConnection")
-        super().__init__()
-        self._port: str = port      # Example: "COM4"
-        self._baudrate: int = baudrate
-        self.is_connected: bool = False
-        self.create_serial_port()
-
-    def create_serial_port(self):
-        self.serial = QSerialPort()
-        self.serial.setPortName(self._port)
-        self.serial.setBaudRate(self._baudrate)
-        self.is_connected: bool = False
-
-    @property
-    def port(self):
-        if self.serial:
-            # perhaps return self.serial.portName()?
-            return self._port
-        else:
-            return None
-
-    @property
-    def baudrate(self):
-        if self.serial:
-            # perhaps return self.serial.baudRate()
-            return self._baudrate
-        else:
-            return None
-
-    def open(self):
-        """
-        Open the serial link
-        """
-
-        debug("REPLConnection open()")
-        logger.info("Connecting to REPL on port: {}".format(self.port))
-
-        if not self.serial:
-            self.create_serial_port()
-            debug("Created new instance of QSerialPort")
-
-        if not self.serial.open(QIODevice.ReadWrite):
-            msg = "Cannot connect to device on port {}".format(self.port)
-            debug(msg)
-            raise IOError(msg)
-
-        self.serial.setDataTerminalReady(True)
-        if not self.serial.isDataTerminalReady():
-            # Using pyserial as a 'hack' to open the port and set DTR
-            # as QtSerial does not seem to work on some Windows :(
-            # See issues #281 and #302 for details.
-            self.serial.close()
-            pyser = Serial(self.port)  # open serial port w/pyserial
-            pyser.dtr = True
-            pyser.close()
-            self.serial.open(QIODevice.ReadWrite)
-        self.serial.readyRead.connect(self._on_serial_read)
-
-        debug(f"Connected to {self.port}")
-        logger.info("Connected to REPL on port: {}".format(self.port))
-        self.is_connected = True
-
-    def close(self) -> None:
-        """Close and clean up the currently open serial link.
-        :returns: Nothing
-        """
-        logger.info("Closing connection to REPL on port: {}".format(self.port))
-        if self.serial:
-            self.serial.close()
-            self.serial = None
-            self.is_connected = False
-
-    def _on_serial_read(self) -> None:
-        """
-        Called when data is ready to be send from the device
-        """
-        data = bytes(self.serial.readAll())
-        debug(f"Received {data=}")
-        self.data_received.emit(data)
-
-    def write(self, data: bytes) -> None:
-        debug(f"Serial write {data=}")
-        self.serial.write(data)
-
-    def send_interrupt(self) -> None:
-        """Send interrupt sequence to connected devce.
-        This contains CTRL+B (exit raw mode) and CTRL+C (interrupt running process).
-        :returns: Nothing
-        """
-        debug("ReplConnection send_interrupt()")
-        self.write(EXIT_RAW_MODE)  # CTRL-B
-        self.write(KEYBOARD_INTERRUPT)  # CTRL-C
-
-    def execute(self, commands: list) -> None:
-        """Execute a series of commands over a period of time (scheduling
-        remaining commands to be run in the next iteration of the event loop).
-        :returns: Nothing
-        """
-        if commands:
-            command = commands[0]
-            logger.info("Sending command {}".format(command))
-            self.write(command)
-            remainder = commands[1:]
-            remaining_task = lambda commands=remainder: self.execute(commands)
-            QTimer.singleShot(2, remaining_task)
-
-    def send_commands(self, commands) -> None:
-        """Send commands to the REPL via raw mode.
-        First will send a raw_on, then the commands, raw_off, followed by a soft reboot.
-        :returns: Nothing
-        """
-        # Sequence of commands to get into raw mode (From pyboard.py).
-        raw_on = [
-            KEYBOARD_INTERRUPT,
-            KEYBOARD_INTERRUPT,
-            ENTER_RAW_MODE,
-            SOFT_REBOOT,
-            KEYBOARD_INTERRUPT,
-            KEYBOARD_INTERRUPT,
-        ]
-
-        newline = [b'print("\\n");']
-        commands = [c.encode("utf-8") + b"\r" for c in commands]
-        commands.append(b"\r")
-        commands.append(SOFT_REBOOT)
-        raw_off = [EXIT_RAW_MODE]
-        command_sequence = raw_on + newline + commands + raw_off
-        logger.info(command_sequence)
-        self.execute(command_sequence)
 
 
 class Demo(QMainWindow):
