@@ -38,6 +38,7 @@ import cmd2  # type: ignore
 from cmd2 import fg
 import colorama
 import serial
+from PyQt5.Qt import QEventLoop, QTimer
 
 # Local imports
 import param
@@ -64,7 +65,7 @@ class MpFileShell(cmd2.Cmd):
     CMD_CAT_REBOOT = "Reboot related commands"
     CMD_CAT_RUN = "Execution commands"
 
-    def __init__(self, color=False, caching=False, reset=False):
+    def __init__(self, color=False, caching=False, reset=False, port=""):
 
         startup_script = os.path.join(os.path.dirname(__file__), ".esp32clirc")
         super().__init__(
@@ -91,7 +92,7 @@ class MpFileShell(cmd2.Cmd):
         self.caching = caching
         self.reset = reset
 
-        self.port = ""      # Name of the COM port
+        self.port = port      # Name of the COM port
         self.fe = None
         self.repl = None
         self.tokenizer = Tokenizer()
@@ -120,6 +121,11 @@ class MpFileShell(cmd2.Cmd):
                 choices=fg.colors(),
             )
         )
+
+        if self.port:
+            debug(f"Automatic trying to use {port=}")
+            self.__connect(f"ser:{self.port}")
+
 
     def __del__(self):
         self.__disconnect()
@@ -229,6 +235,7 @@ class MpFileShell(cmd2.Cmd):
             return [token.value for token in tokens]
         return None
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_exit(self, _args):
         """Exit this shell."""
@@ -237,6 +244,7 @@ class MpFileShell(cmd2.Cmd):
 
     do_EOF = do_exit
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_open(self, args) -> None:
         """open <TARGET>
@@ -272,11 +280,13 @@ class MpFileShell(cmd2.Cmd):
         ports = glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")
         return [i[5:] for i in ports if i[5:].startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_close(self, _args):
         """Close connection to device."""
         self.__disconnect()
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_ls(self, _args):
         """List remote files."""
@@ -315,32 +325,38 @@ class MpFileShell(cmd2.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_pwd(self, _args):
-        """Print current remote directory."""
+        """Print current remote directory.
+        """
         if self.__is_open():
             print(self.fe.pwd())
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
-    def do_cd(self, args):
+    def do_cd(self, statement) -> None:
         """cd <TARGET DIR>
-        Change current remote directory to given target.
+        Change remote directory on the target
         """
-        if not len(args):
-            self.__error("Missing argument: <REMOTE DIR>")
-        elif self.__is_open():
-            try:
-                s_args = self.__parse_file_names(args)
-                if not s_args:
-                    return
-                elif len(s_args) > 1:
-                    self.__error("Only one argument allowed: <REMOTE DIR>")
-                    return
 
-                self.fe.cd(s_args[0])
-                self.__set_prompt_path()
-            except IOError as e:
-                self.__error(str(e))
+        if not statement.arg_list:
+            self.__error("Missing argument: <REMOTE DIR>")
+            return
+
+        if len(statement.arg_list) != 1:
+            self.__error("Only one argument allowed: <REMOTE DIR>")
+            return
+
+        if not self.__is_open():
+            self.__error("Not connected")
+            return
+
+        try:
+            self.fe.cd(statement.args)
+            self.__set_prompt_path()
+        except IOError as e:
+            self.__error(str(e))
 
     def complete_cd(self, *args):
 
@@ -351,26 +367,33 @@ class MpFileShell(cmd2.Cmd):
 
         return [i for i in files if i.startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
-    def do_md(self, args):
-        """md <TARGET DIR>
+    def do_md(self, statement):
+        """md <TARGET DIR> or mkdir <TARGET DIR>
         Create new remote directory.
         """
-        if not len(args):
+
+        if not statement.arg_list:
             self.__error("Missing argument: <REMOTE DIR>")
-        elif self.__is_open():
-            try:
-                s_args = self.__parse_file_names(args)
-                if not s_args:
-                    return
-                if len(s_args) > 1:
-                    self.__error("Only one argument allowed: <REMOTE DIR>")
-                    return
+            return
 
-                self.fe.md(s_args[0])
-            except IOError as e:
-                self.__error(str(e))
+        if len(statement.arg_list) != 1:
+            self.__error("Only one argument allowed: <REMOTE DIR>")
+            return
 
+        if not self.__is_open():
+            self.__error("Not connected")
+            return
+
+        try:
+            self.fe.md(statement.args)
+        except IOError as e:
+            self.__error(str(e))
+
+    do_mkdir = do_md        # Create an alisas
+
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_lls(self, statement):
         """List files in current local directory."""
@@ -387,7 +410,7 @@ class MpFileShell(cmd2.Cmd):
 
         files = folder.glob('*')
         debug(f"{files=}")
-        print(f"\nLocal files in {folder}:\n")
+        print(f"\nLocal files in sourcefolder \"{folder}\":\n")
         for f in files:
             debug(f"{f=}")
             if f.is_dir():
@@ -418,6 +441,7 @@ class MpFileShell(cmd2.Cmd):
         # for filename in filenames:
         #     print(f"{filename.strip()}\n")
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_lcd(self, statement):
         """lcd <TARGET DIR>
@@ -445,6 +469,7 @@ class MpFileShell(cmd2.Cmd):
         dirs = [o for o in os.listdir(".") if os.path.isdir(os.path.join(".", o))]
         return [i for i in dirs if i.startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_lpwd(self, _args):
         """lpwd = Print current local directory."""
@@ -452,46 +477,42 @@ class MpFileShell(cmd2.Cmd):
         # print(os.getcwd())
         print(esp32common.get_sourcefolder())
 
-
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
-    def do_put(self, args):
+    def do_put(self, statement):
         """put <LOCAL FILE> [<REMOTE FILE>]
         Upload local file. If the second parameter is given,
         its value is used for the remote file name. Otherwise the
         remote file will be named the same as the local file.
         """
 
-        if not args:
+        if not statement.args:
             self.__error("Missing arguments: <LOCAL FILE> [<REMOTE FILE>]")
+            return
 
-        elif self.__is_open():
+        if not self.__is_open():
+            self.__error("No connection to device")
+            return
 
-            s_args = self.__parse_file_names(args)
-            if not s_args:
-                return
-            elif len(s_args) > 2:
-                self.__error(
-                    "Only one ore two arguments allowed: <LOCAL FILE> [<REMOTE FILE>]"
-                )
-                return
+        lfile_name = statement.arg_list[0]
 
-            lfile_name = s_args[0]
+        # If no remote filename is given, use the basename of the local filename
+        if len(statement.arg_list) > 1:
+            rfile_name = statement.arg_list[1]
+        else:
+            rfile_name = pathlib.Path(statement.arg_list[0]).name
 
-            if len(s_args) > 1:
-                rfile_name = s_args[1]
-            else:
-                rfile_name = lfile_name
-
-            try:
-                self.fe.put(lfile_name, rfile_name)
-            except IOError as e:
-                self.__error(str(e))
+        try:
+            self.fe.put(lfile_name, rfile_name)
+        except IOError as e:
+            self.__error(str(e))
 
     @staticmethod
     def complete_put(*args):
         files = [o for o in os.listdir(".") if os.path.isfile(os.path.join(".", o))]
         return [i for i in files if i.startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_mput(self, statement):
         """mput <SELECTION REGEX>
@@ -519,6 +540,7 @@ class MpFileShell(cmd2.Cmd):
         except IOError as e:
             self.__error(str(e))
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_get(self, statement):
         """get <REMOTE FILE> [<LOCAL FILE>].
@@ -551,6 +573,7 @@ class MpFileShell(cmd2.Cmd):
             except IOError as e:
                 self.__error(str(e))
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_mget(self, statement):
         """mget <SELECTION REGEX>
@@ -586,6 +609,7 @@ class MpFileShell(cmd2.Cmd):
 
         return [i for i in files if i.startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_rm(self, args):
         """rm <REMOTE FILE or DIR>
@@ -612,6 +636,7 @@ class MpFileShell(cmd2.Cmd):
             except PyboardError:
                 self.__error("Unable to send request to %s" % self.fe.sysname)
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_mrm(self, args):
         """mrm <SELECTION REGEX>
@@ -639,6 +664,7 @@ class MpFileShell(cmd2.Cmd):
 
         return [i for i in files if i.startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_cat(self, statement):
         """cat <REMOTE FILE>
@@ -690,6 +716,7 @@ class MpFileShell(cmd2.Cmd):
 
     complete_cat = complete_get
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
     def do_exec(self, args):
         """exec <STATEMENT>
@@ -716,6 +743,7 @@ class MpFileShell(cmd2.Cmd):
             except PyboardError as e:
                 self.__error(str(e))
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_run(self, statement):
         """Run the given local file on the connected device"""
@@ -725,105 +753,100 @@ class MpFileShell(cmd2.Cmd):
 
         sourcefolder = esp32common.get_sourcefolder()
         localfile = sourcefolder.joinpath(filename)
+        debug(f"run() {localfile=}")
 
         with open(localfile, 'r') as f:
             code = f.read()
 
         python_script = code.split("\n")
-        print(python_script)
+        debug(f"{python_script=}")
+
+        print("run/start is not functional yet")
 
         # @todo: Send the python file contents:
-        # if not self.repl:
-        #     self.toggle_repl(None)
         # if self.repl and self.connection:
         #     self.connection.send_commands(python_script)
 
     do_start = do_run  # Create an alias
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
     def do_repl(self, _args):
         """repl = Enter Micropython REPL."""
 
-        import serial
-
-        ver = serial.VERSION.split(".")
-
-        if int(ver[0]) < 2 or (int(ver[0]) == 2 and int(ver[1]) < 7):
-            self.__error(
-                "REPL needs PySerial version >= 2.7, found %s" % serial.VERSION
-            )
+        if not self.__is_open():
+            print("No connection")
             return
 
-        if self.__is_open():
+        if not self.repl:
 
-            if self.repl is None:
+            debug("Importing mp.term Term")
+            from mp.term import Term
 
-                from mp.term import Term
+            self.repl = Term(self.fe.con)
 
-                self.repl = Term(self.fe.con)
-
-                if platform.system() == "Windows":
-                    self.repl.exit_character = chr(0x11)
-                else:
-                    self.repl.exit_character = chr(0x1D)
-
-                self.repl.raw = True
-                self.repl.set_rx_encoding("UTF-8")
-                self.repl.set_tx_encoding("UTF-8")
-
+            if platform.system() == "Windows":
+                self.repl.exit_character = chr(0x11)
             else:
-                self.repl.serial = self.fe.con
+                self.repl.exit_character = chr(0x1D)
 
-            pwd = self.fe.pwd()
-            self.fe.teardown()
-            self.repl.start()
+            self.repl.raw = True
+            self.repl.set_rx_encoding("UTF-8")
+            self.repl.set_tx_encoding("UTF-8")
 
-            if self.repl.exit_character == chr(0x11):
-                print("\n*** Exit REPL with Ctrl+Q ***")
-            else:
-                print("\n*** Exit REPL with Ctrl+] ***")
+        else:
+            debug("Reusing self.fe.con")
+            self.repl.serial = self.fe.con
 
-            try:
-                self.repl.join(True)
-            except Exception:
-                pass
+        pwd = self.fe.pwd()
+        self.fe.teardown()
+        self.repl.start()
 
-            self.repl.console.cleanup()
+        if self.repl.exit_character == chr(0x11):
+            print("\n*** Exit REPL with Ctrl+Q ***")
+        else:
+            print("\n*** Exit REPL with Ctrl+] ***")
 
-            if self.caching:
-                # Clear the file explorer cache so we can see any new files.
-                self.fe.cache = {}
+        try:
+            self.repl.join(True)
+        except Exception:
+            pass
 
-            self.fe.setup()
-            try:
-                self.fe.cd(pwd)
-            except RemoteIOError as e:
-                # Working directory does not exist anymore
-                self.__error(str(e))
-            finally:
-                self.__set_prompt_path()
-            print("")
+        self.repl.console.cleanup()
 
+        if self.caching:
+            # Clear the file explorer cache so we can see any new files.
+            self.fe.cache = {}
+
+        self.fe.setup()
+        try:
+            self.fe.cd(pwd)
+        except RemoteIOError as e:
+            # Working directory does not exist anymore
+            self.__error(str(e))
+        finally:
+            self.__set_prompt_path()
+        print("")
+
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
-    def do_mpyc(self, args):
+    def do_mpyc(self, statement):
         """mpyc <LOCAL PYTHON FILE>
         Compile a Python file into byte-code by using mpy-cross (which needs to be in the path).
         The compiled file has the same name as the original file but with extension '.mpy'.
         """
 
-        if not len(args):
+        if not statement.arg_list:
             self.__error("Missing argument: <LOCAL FILE>")
             return
 
-        s_args = self.__parse_file_names(args)
-        if not s_args:
-            return
-        elif len(s_args) > 1:
-            self.__error("Only one argument allowed: <LOCAL FILE>")
-            return
+        if len(statement.arg_list) > 1:
+            self.__error("Only 1 argument allowed")
+
+        filename = statement.arg_list[0]
 
         sourcedir = esp32common.get_sourcefolder()
-        sourcefile = sourcedir.joinpath(s_args[0])
+        sourcefile = sourcedir.joinpath(filename)
         if not pathlib.Path(sourcefile).is_file():
             self.__error(f"Could not find {sourcefile}")
             return
@@ -842,6 +865,7 @@ class MpFileShell(cmd2.Cmd):
         ]
         return [i for i in files if i.startswith(args[0])]
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
     def do_putc(self, statement):
         """mputc <LOCAL PYTHON FILE> [<REMOTE FILE>]
@@ -893,7 +917,7 @@ class MpFileShell(cmd2.Cmd):
 
     complete_putc = complete_mpyc
 
-    # ===========================================================================
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_edit(self, statement):
         """Edit a file on the remote device.
@@ -948,6 +972,7 @@ class MpFileShell(cmd2.Cmd):
             else:
                 debug(f"{local_filename} was not modified")
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_ledit(self, statement):
         """Locally edit a file in the local source folder on the PC.
@@ -975,6 +1000,7 @@ class MpFileShell(cmd2.Cmd):
         cmdstr = f'"{editor}" "{sourcefile}"'
         esp32common.local_run(cmdstr)
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_DEBUG)
     def do_echo(self, statement):
         """Just print the given text back.
@@ -983,13 +1009,19 @@ class MpFileShell(cmd2.Cmd):
         """
         print(statement)
 
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_DEBUG)
     def do_cls(self, _statement):
         """Clear the screen.
         """
-        os.system("cls")
 
-    # ===========================================================================
+        debug("do_cls()")
+        if param.is_gui:
+            pass        # todo: implement this for the gui as well.
+        else:
+            os.system("cls")
+
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_sync(self, statement):
         """Copy all python files (Sync) from the source folder to the connected device.
@@ -1008,25 +1040,152 @@ class MpFileShell(cmd2.Cmd):
         if len(statement.arg_list) == 1:
             sourcefolder = pathlib.Path(statement.arg_list[0])
         else:
-            sourcefolder = pathlib.Path(param.config["src"]["srcpath"])
+            sourcefolder = esp32common.get_sourcefolder()
 
         if not sourcefolder.is_dir():
             print(f"Could not find folder {sourcefolder}")
             return
 
-        # files = [e for e in sourcefolder.iterdir() if e.is_file()]
-        # for filename in files:
-        #     print(filename)
-
-        for filename in sourcefolder.glob("*.py"):
-            print(f"Syncing {filename}")
-            # out, err = esp32common.put(str(filename), str(filename))
+        print(f"Syncing all files from sourcefolder \"{sourcefolder}\" to device")
+        for filename in sourcefolder.glob("*"):
+            print(f" *  {filename}")
             try:
-                self.fe.put(filename, filename)
+                self.fe.put(filename, filename.name)
             except IOError as e:
                 self.__error(str(e))
 
+    # -------------------------------------------------------------------------
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_flash(self, statement):
+        """flash <BINFILE>
 
+        Flash the connected device with the given bin file.
+        This function uses the ..\bin\esptool.exe for the actual flashing
+        """
+
+        import time
+
+        # Check if we can find the esptool executable
+        esptool = pathlib.Path("../bin/esptool.exe").resolve()
+        if not esptool.is_file():
+            print(f"Error: Could not find {str(esptool)}")
+            return
+
+        # Try if this is a full path
+        binfile = pathlib.Path(statement.args)
+        if not binfile.is_file():
+            print(f"Error1: Could not find {str(binfile)}")
+            # Try to find the binfile in the binfile path
+            folder = pathlib.Path(param.config['src']['binpath'])
+            binfile = folder.joinpath(statement.args)
+            if not binfile.is_file():
+                print(f"Error2: Could not find {str(binfile)}")
+                available_files = folder.glob("*.bin")
+                print(f"Available files are:")
+                for available_file in available_files:
+                    print(f" * {available_file}")
+                return
+            else:
+                print(f"Using {str(binfile)}")
+
+        # Step 1 of 4: Close the current com port
+        self.__disconnect()
+
+        # Step 2 of 4: Erase the flash
+        # todo: implement variable com port
+        self.do_eraseflash(None)
+
+        # # Step 3 of 4: Program the binfile
+        # # todo: implement variable com port
+        cmdstr = f'"{esptool}" --chip esp32 --port COM4: --baud 460800 write_flash -z 0x1000 "{binfile}"'
+        debug(f"{cmdstr=}")
+        if param.is_gui:
+            param.worker.run_command(cmdstr)
+            while param.worker.active:
+                # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
+                loop = QEventLoop()
+                QTimer.singleShot(250, loop.quit)
+                loop.exec_()
+        else:
+            esp32common.local_run(cmdstr)
+
+        #
+        # print("Give it some time to initialize")
+        # time.sleep(10)
+
+        # Step 4 of 4: Open the com port again
+        # todo: implement variable com port
+        print("--- Connecting again")
+        self.do_open("com4")
+
+    # -------------------------------------------------------------------------
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_testflash(self, statement):
+        """flash <BINFILE>
+
+        Flash the connected device with the given bin file.
+        This function uses the ..\bin\esptool.exe for the actual flashing
+        """
+
+        import time
+
+        if param.is_gui:
+            try:
+                param.worker.run_command("ping 127.0.0.1")
+            except Exception as err:
+                print(err)
+        else:
+            cmdstr = "ping 127.0.0.1"
+            esp32common.local_run(cmdstr)
+
+        if param.is_gui:
+            while param.worker.active:
+                # print("Wait till current worker is finished")
+                # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
+                loop = QEventLoop()
+                QTimer.singleShot(250, loop.quit)
+                loop.exec_()
+
+        if param.is_gui:
+            try:
+                param.worker.run_command("ping 192.168.178.1")
+            except Exception as err:
+                print(err)
+        else:
+            cmdstr = "ping 127.0.0.1"
+            esp32common.local_run(cmdstr)
+
+    # -------------------------------------------------------------------------
+    @cmd2.with_category(CMD_CAT_FILES)
+    def do_eraseflash(self, _statement) -> None:
+        """Erase the flash memory of the connected device.
+
+        This function uses the ..\bin\esptool.exe for the actual flashing
+        """
+
+        # Check if we can find the esptool executable
+        esptool = pathlib.Path("../bin/esptool.exe")
+        if not esptool.is_file():
+            print(f"Error: Could not find {str(esptool)}")
+            return
+
+        cmdstr = f'"{esptool}" --chip esp32 --port COM4: erase_flash'
+        if param.is_gui:
+            try:
+                param.worker.run_command(cmdstr)
+                while param.worker.active:
+                    # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
+                    loop = QEventLoop()
+                    QTimer.singleShot(250, loop.quit)
+                    loop.exec_()
+            except Exception as err:
+                print(err)
+        else:
+            esp32common.local_run(cmdstr)
+
+
+
+# =============================================================================
 def main():
 
     parser = argparse.ArgumentParser()
@@ -1165,6 +1324,7 @@ def main():
             print("keyboard interrupt")
 
 
+# =============================================================================
 if __name__ == "__main__":
 
     import lib.helper

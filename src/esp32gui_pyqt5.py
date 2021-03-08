@@ -1,21 +1,28 @@
 """ESP32 GUI Shell (pyside2) main module"""
 
 # Global imports
-
 import sys
 import subprocess
+import time
+
+# 3rd party imports
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5.QtGui import QTextCursor
+from PyQt5.QtCore import pyqtSlot
+from PyQt5.Qt import QEventLoop, QTimer
 
 # Local imports
 import param
 from esp32shell_qt_design import Ui_MainWindow
 from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
 import esp32common
-
 import esp32cli
 import qt5_repl_gui
+
+from worker import Worker
+
+# constants
 
 MODE_COMMAND = 1
 MODE_REPL = 2
@@ -57,9 +64,6 @@ def miniterm(port) -> tuple:
     command_list = ["pyserial-miniterm.exe", port, "115200"]
     debug(f"Calling {' '.join(command_list)}")
 
-    # subprocess.run(command_list, shell=True)
-    # return "", ""
-
     proc = subprocess.Popen(
         command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
@@ -83,9 +87,13 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        # After a command is entered, and ENTER is pressed, react on it
-        self.ui.command_input.returnPressed.connect(self.do_command)
+        param.worker = Worker()
+        param.worker.outSignal.connect(self.append_text)
 
+        # After a command is entered, and ENTER is pressed, react on it
+        self.ui.command_input.returnPressed.connect(self.do_entered_command)
+
+        # After a new sourcepath is entered (and ENTER is pressed), react on it
         self.ui.lineEdit_srcpath.returnPressed.connect(self.get_ui_properties)
 
         # If a command from the list of commands is clicked, execute it
@@ -124,7 +132,7 @@ class MainWindow(QMainWindow):
         self.ui.ReplPane.set_connection(self.repl_connection)
         self.repl_connection.data_received.connect(self.ui.ReplPane.process_tty_data)
 
-        self.cmdlineapp = esp32cli.MpFileShell()
+        self.cmdlineapp = esp32cli.MpFileShell(port=port)
 
     # -------------------------------------------------------------------------
     # @dumpArgs
@@ -137,8 +145,8 @@ class MainWindow(QMainWindow):
         self.text_update.emit(text)  # noqa # Send signal to synchronise call with main thread # noqa
 
     # -------------------------------------------------------------------------
-    # @dumpArgs
-    def append_text(self, text) -> None:
+    @pyqtSlot(str)
+    def append_text(self, text: str) -> None:
         """Text display update handler.
 
         :param text: Text to display
@@ -156,6 +164,7 @@ class MainWindow(QMainWindow):
             if sep:  # New line if LF
                 cur.insertBlock()
         self.ui.text_output.setTextCursor(cur)  # Update visible cursor
+        self.ui.text_output.update()
 
     @staticmethod
     def flush(self) -> None:
@@ -278,7 +287,6 @@ class MainWindow(QMainWindow):
 
         # Save GUI setting
         srcpath = self.ui.lineEdit_srcpath.text()
-        # self.config['src']['srcpath'] = srcpath
         esp32common.set_sourcefolder(srcpath)
 
         # Save the (modified configuration file)
@@ -296,7 +304,7 @@ class MainWindow(QMainWindow):
 
             # Show current uPython source path
             srcpath = esp32common.get_sourcefolder()
-            self.ui.lineEdit_srcpath.setText(srcpath)
+            self.ui.lineEdit_srcpath.setText(str(srcpath))
 
             # Show the serial port which will be used
             port = self.config['com']['port']
@@ -304,9 +312,10 @@ class MainWindow(QMainWindow):
             self.show_text(f"Using {port} {desc}\r\n")
             self.ui.label_comport.setText(f"{port} ({desc}")
 
-        except Exception as e:
-            debug(e)
+        except Exception as err:
+            debug(err)
             return False
+
         return True
 
     # -------------------------------------------------------------------------
@@ -340,19 +349,40 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------------
     def do_clicked_command(self, item) -> None:
         """Execute the command which was clicked on.
+
         :param item: The item which was clicked. The command to execute is in the text of that item.
         :returns: Nothing
         """
 
         cmd = item.text()
+        # debug(f"do_entered command {cmd=}")
         self.do_command(cmd_str=cmd)
 
     # -------------------------------------------------------------------------
-    @dumpArgs
+    def do_entered_command(self) -> None:
+        """Perform the command as found in the 'command_input' box.
+
+        This function is called when an 'Enter' was detected.
+        It will grab the text from the input box and process that command
+
+        :returns: Nothing
+        """
+
+        cmd = self.ui.command_input.text()
+        self.do_command(cmd_str=cmd)
+
+    # -------------------------------------------------------------------------
     def do_command(self, cmd_str=None) -> None:
         """Execute the given command
         :param cmd_str: The command to execute
         :returns: Nothing
+
+        There are a number of special commands, e.g.::
+        * `cls` (Clear Screen) will make output windows empty.
+        * `repl` will put this application in repl mode
+        * `cmd` will put this application in cmd mode.
+
+        All other commands will make use of the defined actions in the cli.
 
         If it was a valid command, the command input window will be cleared after it's execution.
 
@@ -361,35 +391,44 @@ class MainWindow(QMainWindow):
         # Note: Only use return from one of the if/elif branches in case of an error.
         # At the end, the last command will be added to a list of commands.
 
+        debug(f"do_command {cmd_str=}")
+        if not cmd_str:
+            debug("ERROR: No command given")
+
         if not self.mode == MODE_COMMAND:
             debug("We were not in command mode, switching to command mode now")
             self.change_to_command_mode()
 
-        if not cmd_str:
-            cmd_str = self.ui.command_input.text()
+        try:
+            if cmd_str == "cls":
+                debug("Clearing output windows.")
+                self.ui.text_output.setText("")
+                self.ui.ReplPane.setText("")
+            elif cmd_str == "repl":
+                self.change_to_repl_mode()
+            elif cmd_str == "cmd":
+                self.change_to_command_mode()
+            elif cmd_str == "test":
+                param.worker.run_command("ping 127.0.0.1")
+                while param.worker.active:
+                    # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
+                    loop = QEventLoop()
+                    QTimer.singleShot(250, loop.quit)
+                    loop.exec_()
+                param.worker.run_command("ping 192.168.178.1")
+            else:
+                self.cmdlineapp.onecmd_plus_hooks(cmd_str)
+            # Clear the input window. This also indicates that the
+            # command was executed without problem.
+            self.ui.command_input.clear()
+        except Exception as err:
+            print(f"{err=}")
 
-        if cmd_str == "cls":
-            self.ui.text_output.setText("")
-            self.ui.ReplPane.textbox.setText("")
-        elif cmd_str == "repl":
-            self.change_to_repl_mode()
-        elif cmd_str == "cmd":
-            self.change_to_command_mode()
-        else:
-            self.cmdlineapp.onecmd_plus_hooks(cmd_str)
-
-        # --- This will search in the QT list instead of the manually maintained list
-        # --- Needs: from PySide2.QtCore import Qt
-        # items = self.ui.commandlist.findItems(cmd_str, Qt.MatchExactly)
-        # print(f"found items: {items=}")
-        # for item in items:
-        #     print(f"{item=} {item.text()}")
-        self.ui.command_input.clear()
+        # If this command is not in the list of commands entered till now,
+        # add it.
         if cmd_str not in self.list_of_commands:
             self.list_of_commands.append(cmd_str)
             self.ui.commandlist.addItem(cmd_str)
-        # else:
-        #     print(f"command \"{cmd_str}\" is already in the list of commands")
 
 
 # -----------------------------------------------------------------------------
@@ -400,6 +439,8 @@ if __name__ == "__main__":
     # port, desc = esp32common.get_comport()
     # config['com']['port'] = port
     # config['com']['desc'] = desc
+
+    param.is_gui = True
 
     app = QApplication(sys.argv)
     window = MainWindow()

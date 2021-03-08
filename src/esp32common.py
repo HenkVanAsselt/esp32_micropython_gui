@@ -112,7 +112,7 @@ def set_sourcefolder(folder) -> bool:
 
 # -----------------------------------------------------------------------------
 def get_sourcefolder() -> pathlib.Path:
-    """Get micropython sourcefolder.
+    """Get micropython sourcefolder from the configuration.
 
     :returns: Path to sourcefolder
     """
@@ -141,6 +141,29 @@ def local_run(cmdstr) -> bool:
     except OSError as error:
         print("Execution failed:", error, file=sys.stderr)
         return False
+
+# -----------------------------------------------------------------------------
+@dumpArgs
+def local_exec(command_list) -> bool:
+    """"Run a local command, for example to start the editor.
+
+    :param command_list: List of commands
+    :returns: tuple of stdout and stderr results
+
+    """
+
+    proc = subprocess.Popen(
+        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    out, err = proc.communicate()
+    debug(f"{out=}")
+    debug(f"{err=}")
+    if out:
+        print(out.decode())
+    if err:
+        print(err.decode())
+
+    return out, err
 
 
 # ===============================================================================

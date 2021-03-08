@@ -18,6 +18,9 @@ MODE_REPL = 2
 config = configparser.ConfigParser()
 config.read('esp32cli.ini')
 
+is_gui = False      # Meaning, bare CLI is used. Will be set to true in GUI version
+worker = None
+
 # ===============================================================================
 if __name__ == "__main__":
 

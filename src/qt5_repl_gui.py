@@ -143,7 +143,6 @@ class MicroPythonREPLPane(QTextEdit):
         else:
             debug("WARINING: In send(): No connection was established yet")
 
-    @dumpArgs
     def keyPressEvent(self, data):
         """
         Called when the user types something in the REPL.

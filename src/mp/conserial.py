@@ -72,12 +72,12 @@ class ConSerial(ConBase):
     def read(self, size):
         """Read 'size' bytes from the serial port."""
         data = self.serial.read(size)
-        logging.debug("serial read < %s" % str(data))
+        logging.debug("conserial read < %s" % str(data))
         return data
 
     def write(self, data):
         """Write 'data' to the serial port."""
-        logging.debug("serial write > %s" % str(data))
+        logging.debug("conserial write > %s" % str(data))
         return self.serial.write(data)
 
     def inWaiting(self):

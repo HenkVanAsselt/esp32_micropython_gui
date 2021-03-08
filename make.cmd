@@ -66,6 +66,10 @@ rem --- Generate DOXYGEN documentation
 :doxygen
     call doxygen 
     goto _eof
+	
+:show_doxygen
+	"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" doc\doxygen\html\index.html
+	goto _eof
 
 :sphinx
     pushd doc & call make html & popd

@@ -80,4 +80,4 @@ class Ui_MainWindow(object):
         self.radioButton_replmode.setText(_translate("MainWindow", "REPL mode"))
         self.label_comport.setText(_translate("MainWindow", "COM: "))
         self.label_srcpath.setText(_translate("MainWindow", "Source path"))
-from repl_gui import MicroPythonREPLPane
+from qt5_repl_gui import MicroPythonREPLPane

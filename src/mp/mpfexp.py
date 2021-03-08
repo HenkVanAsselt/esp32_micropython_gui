@@ -41,7 +41,7 @@ from mp.pyboard import Pyboard
 from mp.pyboard import PyboardError
 from mp.retry import retry
 
-from lib.helper import debug
+from lib.helper import debug, dumpFuncname, dumpArgs
 
 
 def _was_file_not_existing(exception):
@@ -161,6 +161,7 @@ class MpFileExplorer(Pyboard):
         Pyboard.close(self)
         self.dir = None
 
+    @dumpFuncname
     def teardown(self):
 
         self.exit_raw_repl()

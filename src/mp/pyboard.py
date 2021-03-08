@@ -6,6 +6,8 @@ Pyboard REPL interface
 import sys
 import time
 
+from lib.helper import debug, dumpFuncname, dumpArgs
+
 try:
     stdout = sys.stdout.buffer
 except AttributeError:
@@ -33,9 +35,11 @@ class Pyboard:
         if self.con is not None:
             self.con.close()
 
+    @dumpArgs
     def read_until(self, min_num_bytes, ending, timeout=10, data_consumer=None):
 
         data = self.con.read(min_num_bytes)
+        # debug(f'read {data=}')
         if data_consumer:
             data_consumer(data)
         timeout_count = 0
@@ -53,6 +57,7 @@ class Pyboard:
                 if timeout is not None and timeout_count >= 100 * timeout:
                     break
                 time.sleep(0.01)
+        debug(f"read_until returns {data=}")
         return data
 
     def enter_raw_repl(self):
@@ -97,6 +102,7 @@ class Pyboard:
                 print(data)
                 raise PyboardError("could not enter raw repl")
 
+    @dumpFuncname
     def exit_raw_repl(self):
         self.con.write(b"\r\x02")  # ctrl-B: enter friendly REPL
 
