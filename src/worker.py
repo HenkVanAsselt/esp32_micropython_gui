@@ -68,6 +68,9 @@ class Worker(QtCore.QObject):
     outSignal = QtCore.pyqtSignal(str)
     active = False
 
+    # def __init__(self):
+    #     self.active = False
+
     # -------------------------------------------------------------------------
     def run_command(self, cmd, **kwargs):
         if self.active:
@@ -85,6 +88,7 @@ class Worker(QtCore.QObject):
         for line in proc.stdout:
             self.outSignal.emit(line.decode())
         self.active = False
+
 
 # =============================================================================
 if __name__ == "__main__":

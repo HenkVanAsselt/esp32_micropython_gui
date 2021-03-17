@@ -3,7 +3,6 @@
 # Global imports
 import sys
 import subprocess
-import time
 
 # 3rd party imports
 from PyQt5 import QtCore, QtGui
@@ -73,15 +72,13 @@ def miniterm(port) -> tuple:
 
 # -----------------------------------------------------------------------------
 class MainWindow(QMainWindow):
-    """QT Main Window
-    """
+    """QT Main Window"""
 
     # text_update = QtCore.Signal(str)        # PySide2
     text_update = QtCore.pyqtSignal(str)
 
     def __init__(self):
-        """Intialize the QT window
-        """
+        """Intialize the QT window"""
 
         super(MainWindow, self).__init__()
         self.ui = Ui_MainWindow()
@@ -105,34 +102,36 @@ class MainWindow(QMainWindow):
         self.ui.radioButton_replmode.clicked.connect(self.change_to_repl_mode)
 
         # Read configuration
-        self.config = esp32common.readconfig('esp32cli.ini')
+        self.config = esp32common.readconfig("esp32cli.ini")
         param.config = self.config
 
-        port, desc = esp32common.get_active_comport()
-        self.config['com']['port'] = port
-        self.config['com']['desc'] = desc
-        debug(f"Possible active com port is {port}")
+        self.port, desc = esp32common.get_active_comport()
+        self.config["com"]["port"] = self.port
+        self.config["com"]["desc"] = desc
+        debug(f"Possible active com port is {self.port}")
 
         # If neccessary, set properties of some elements
         self.set_ui_properties()
 
-        self.mode = MODE_COMMAND        # Start in Command mode
+        self.mode = MODE_COMMAND  # Start in Command mode
 
         debug(f"sys.stdout was {sys.stdout=}")
         self.org_stdout = sys.stdout
         sys.stdout = self
         sys.stderr = self
         debug(f"now sys.stdout is {sys.stdout=}")
-        self.text_update.connect(self.append_text) # noqa # Connect text update to handler
+        self.text_update.connect(
+            self.append_text
+        )  # noqa # Connect text update to handler
         self.ui.command_input.setFocus()
 
         # Prepare the repl window, but do not open a connection yet.
         # This should only be done when repl becomes active.
-        self.repl_connection = qt5_repl_gui.REPLConnection(port, 115200)
+        self.repl_connection = qt5_repl_gui.REPLConnection(self.port, 115200)
         self.ui.ReplPane.set_connection(self.repl_connection)
         self.repl_connection.data_received.connect(self.ui.ReplPane.process_tty_data)
 
-        self.cmdlineapp = esp32cli.MpFileShell(port=port)
+        self.cmdlineapp = esp32cli.ESPShell(port=self.port)
 
     # -------------------------------------------------------------------------
     # @dumpArgs
@@ -142,7 +141,9 @@ class MainWindow(QMainWindow):
         :param text: Text to display
         :return: Nothing
         """
-        self.text_update.emit(text)  # noqa # Send signal to synchronise call with main thread # noqa
+        self.text_update.emit(
+            text
+        )  # noqa # Send signal to synchronise call with main thread # noqa
 
     # -------------------------------------------------------------------------
     @pyqtSlot(str)
@@ -159,7 +160,9 @@ class MainWindow(QMainWindow):
         s = str(text)
         while s:
             head, sep, s = s.partition("\n")  # Split line at LF
-            head = head.replace("\r", "")     # Remove the Carriage Returns to avoid double linespacing.
+            head = head.replace(
+                "\r", ""
+            )  # Remove the Carriage Returns to avoid double linespacing.
             cur.insertText(head)  # Insert text at cursor
             if sep:  # New line if LF
                 cur.insertBlock()
@@ -176,7 +179,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def isatty() -> bool:
-        """ to check if the given file descriptor is open and connected to tty(-like) device or not
+        """to check if the given file descriptor is open and connected to tty(-like) device or not
 
         :return: True
         """
@@ -210,10 +213,12 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------------
     def change_to_command_mode(self) -> int:
         """Switch from serial repl to serial command mode.
-        :returns: New mode
+        :returns: New mode (MODE_COMMAND or MODE_REPL)
         """
 
-        debug("change_to_command_mode()")
+        debug("=====")
+        debug("Change to command mode")
+
         if self.mode == MODE_COMMAND:
             debug("Already in COMMAND mode")
             return self.mode
@@ -225,9 +230,12 @@ class MainWindow(QMainWindow):
         if self.repl_connection.serial:
             debug("self.repl_connection.serial is True. Closing repl_connection")
             self.repl_connection.close()
+        else:
+            debug("self.repl_connection.serial is False")
 
         # Open the serial connection for the commandline mode
-        self.cmdlineapp.onecmd_plus_hooks("open com4")
+        debug("Open the serial connection for the commandline mode")
+        self.cmdlineapp.onecmd_plus_hooks(f"open {self.port}")
 
         self.ui.command_input.setFocus()
         debug(f"now sys.stdout was {sys.stdout=}")
@@ -237,12 +245,15 @@ class MainWindow(QMainWindow):
         return self.mode
 
     # -------------------------------------------------------------------------
+    @dumpFuncname
     def change_to_repl_mode(self, method=INTERNAL) -> int:
         """Switch to REPL mode.
         :param method: The method to use (internal, pytty or miniterm)
         :returns: New method
         """
-        debug("change_to_repl_moded")
+
+        debug("=====")
+
         if self.mode == MODE_REPL:
             debug("Already in REPL mode")
             return self.mode
@@ -254,31 +265,32 @@ class MainWindow(QMainWindow):
         self.change_radiobuttons_to_current_mode()
 
         if method == INTERNAL:
-            # Stop the REPL connection if that is active
             if not self.repl_connection.is_connected:
-                debug("Opening repl connection")
+                debug("Opening new repl connection")
                 self.repl_connection.open()
             else:
-                debug("WARNING: repl connection was already active")
+                debug("reusing exiting active repl connection")
             self.ui.ReplPane.setFocus()
-            # self.ui.ReplPane.textbox.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
             self.ui.ReplPane.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
-            self.repl_connection.send_interrupt()
-            return self.mode
-        elif method == PUTTY:
+            # self.repl_connection.send_interrupt()
+            self.repl_connection.send_exit_raw_mode()
+            return MODE_REPL
+
+        if method == PUTTY:
             putty("COM4:")
             self.show_text("Putty has been terminated\n")
             self.mode = MODE_COMMAND
             return self.mode
+
         elif method == MINITERM:
             miniterm("COM4")
             self.show_text("Miniterm has been terminated\n")
             self.mode = MODE_COMMAND
             return self.mode
-        else:
-            print(f"Unknown repl {method=}")
-            self.mode = MODE_COMMAND
-            return self.mode
+
+        print(f"Unknown repl {method=}")
+        self.mode = MODE_COMMAND
+        return self.mode
 
     # -------------------------------------------------------------------------
     @dumpFuncname
@@ -307,8 +319,8 @@ class MainWindow(QMainWindow):
             self.ui.lineEdit_srcpath.setText(str(srcpath))
 
             # Show the serial port which will be used
-            port = self.config['com']['port']
-            desc = self.config['com']['desc']
+            port = self.config["com"]["port"]
+            desc = self.config["com"]["desc"]
             self.show_text(f"Using {port} {desc}\r\n")
             self.ui.label_comport.setText(f"{port} ({desc}")
 

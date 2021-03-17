@@ -134,11 +134,12 @@ def local_run(cmdstr) -> bool:
     try:
         retcode = subprocess.call(cmdstr, shell=False)
         if retcode < 0:
-            # print("Child was terminated by signal", -retcode, file=sys.stderr)
+            debug("Child was terminated by signal", -retcode, file=sys.stderr)
             return True
-        # print("Child returned", retcode, file=sys.stderr)
+        debug(f"Child returned {retcode=}")
         return True
     except OSError as error:
+        debug(f"Execution failed: {error=}")
         print("Execution failed:", error, file=sys.stderr)
         return False
 

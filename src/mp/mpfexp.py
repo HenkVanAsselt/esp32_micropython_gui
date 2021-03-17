@@ -29,7 +29,6 @@ import os
 import posixpath  # force posix-style slashes
 import pathlib
 import re
-import sre_constants
 import subprocess
 import fnmatch
 
@@ -44,6 +43,7 @@ from mp.retry import retry
 from lib.helper import debug, dumpFuncname, dumpArgs
 
 
+# -------------------------------------------------------------------------
 def _was_file_not_existing(exception):
     """
     Helper function used to check for ENOENT (file doesn't exist),
@@ -59,15 +59,19 @@ def _was_file_not_existing(exception):
     return any(err in stre for err in ("ENOENT", "ENODEV", "EINVAL", "OSError:"))
 
 
+# =============================================================================
 class RemoteIOError(IOError):
     pass
 
 
+# =============================================================================
 class MpFileExplorer(Pyboard):
 
     BIN_CHUNK_SIZE = 64
     MAX_TRIES = 3
 
+    # -------------------------------------------------------------------------
+    @dumpArgs
     def __init__(self, constr, reset=False):
         """
         Supports the following connection strings.
@@ -90,18 +94,23 @@ class MpFileExplorer(Pyboard):
         self.sysname = None
         self.setup()
 
+    # -------------------------------------------------------------------------
+    @dumpFuncname
     def __del__(self):
 
         try:
             self.exit_raw_repl()
-        except:
-            pass
+        except Exception as err:
+            debug("Failure in self.exit_raw_repl()")
+            debug(f"Exeption: {err}")
 
         try:
             self.close()
-        except:
-            pass
+            debug("Failure in self.close()")
+        except Exception as err:
+            debug(f"Exeption: {err}")
 
+    # -------------------------------------------------------------------------
     def __con_from_str(self, constr):
 
         con = None
@@ -150,23 +159,31 @@ class MpFileExplorer(Pyboard):
 
         return con
 
+    # -------------------------------------------------------------------------
     def _fqn(self, name):
         return posixpath.join(self.dir, name)
 
+    # -------------------------------------------------------------------------
     def __set_sysname(self):
         self.sysname = self.eval("uos.uname()[0]").decode("utf-8")
+        debug(f"{self.sysname=}")
 
+    # -------------------------------------------------------------------------
+    @dumpArgs
     def close(self):
 
         Pyboard.close(self)
         self.dir = None
 
+    # -------------------------------------------------------------------------
     @dumpFuncname
     def teardown(self):
 
         self.exit_raw_repl()
         self.sysname = None
 
+    # -------------------------------------------------------------------------
+    @dumpFuncname
     def setup(self):
 
         self.enter_raw_repl()
@@ -184,6 +201,7 @@ class MpFileExplorer(Pyboard):
 
         self.__set_sysname()
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def ls(self, add_files=True, add_dirs=True, add_details=False):
 
@@ -220,17 +238,19 @@ class MpFileExplorer(Pyboard):
         else:
             return sorted(files)
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def rm(self, target):
 
         debug(f"mpfexp.rm() {target=}")
 
         try:
-            # 1st try to delete it as a file
+            debug(f"1st try to delete {target} as a file")
             self.eval("uos.remove('%s')" % (self._fqn(target)))
         except PyboardError:
             try:
                 # 2nd see if it is empty dir
+                debug(f"2nd try to delete {target} if it is an empty dir")
                 self.eval("uos.rmdir('%s')" % (self._fqn(target)))
             except PyboardError as e:
                 # 3rd report error if nor successful
@@ -247,18 +267,19 @@ class MpFileExplorer(Pyboard):
                 else:
                     raise e
 
+    # -------------------------------------------------------------------------
     def mrm(self, pat, verbose=False):
 
         files = self.ls(add_dirs=False)
-        find = re.compile(pat)
+        debug(f"in mrm, {files=}")
 
         for f in files:
-            if find.match(f):
+            if fnmatch.fnmatch(f, pat):
                 if verbose:
                     print(" * rm %s" % f)
-
                 self.rm(f)
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def put(self, src, dst=None) -> None:
 
@@ -296,8 +317,11 @@ class MpFileExplorer(Pyboard):
             else:
                 raise e
 
+    # -------------------------------------------------------------------------
     def mput(self, src_dir, pat, verbose=False):
         """Put multiple files from the given source folder to the current folder on the device.
+
+        Makes use of `put`
 
         :param src_dir: The folder with the sourcefiles
         :param pat: The filename pattern
@@ -313,6 +337,7 @@ class MpFileExplorer(Pyboard):
             self.put(f, f.name)
 
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def get(self, src, dst=None):
 
@@ -344,37 +369,32 @@ class MpFileExplorer(Pyboard):
 
             f.write(binascii.unhexlify(ret))
 
+    # -------------------------------------------------------------------------
     def mget(self, dst_dir, pat, verbose=False):
+        """Get multiple files from the device to the given destination folder.
 
-        try:
+         Makes use of `get`
 
-            debug(f"mpfexp.mget {pat=}")
-            files = self.ls(add_dirs=False)
-            debug(f"mpfexp.mget {files=}")
+         :param dst_dir: The target folfer
+         :param pat: filename pattern (using fnmatch)
+         :param verbose: If true, display the progress.
+         """
 
-            # find = re.compile(pat)
-            # debug(f"mpfexp.mget {find=}")
+        debug(f"mpfexp.mget {pat=}")
+        files = self.ls(add_dirs=False)
+        debug(f"mpfexp.mget {files=}")
 
-            # for f in files:
-            #     if find.match(f):
-            #         if verbose:
-            #             print(" * get %s" % f)
-            #         self.get(f, dst=posixpath.join(dst_dir, f))
-            #     else:
-            #         debug(f"{f} is no match")
+        for f in files:
+            if fnmatch.fnmatch(f, pat):
+                if verbose:
+                    print(" * get %s" % f)
+                self.get(f, dst=posixpath.join(dst_dir, f))
+            else:
+                # debug(f"{f} is no match")
+                pass
 
-            for f in files:
-                if fnmatch.fnmatch(f, pat):
-                    if verbose:
-                        print(" * get %s" % f)
-                    self.get(f, dst=posixpath.join(dst_dir, f))
-                else:
-                    # debug(f"{f} is no match")
-                    pass
 
-        except sre_constants.error as e:
-            raise RemoteIOError("Error in regular expression: %s" % e)
-
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def gets(self, src):
 
@@ -412,6 +432,7 @@ class MpFileExplorer(Pyboard):
 
             return fs
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def puts(self, dst, lines):
 
@@ -439,6 +460,7 @@ class MpFileExplorer(Pyboard):
             else:
                 raise e
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def cd(self, target):
 
@@ -461,9 +483,11 @@ class MpFileExplorer(Pyboard):
             else:
                 raise e
 
+    # -------------------------------------------------------------------------
     def pwd(self):
         return self.dir
 
+    # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def md(self, target):
 
@@ -479,6 +503,7 @@ class MpFileExplorer(Pyboard):
             else:
                 raise e
 
+    # -------------------------------------------------------------------------
     def mpy_cross(self, src, dst=None):
 
         debug(f"mpy_cross() {src=} {dst=}")
@@ -493,17 +518,20 @@ class MpFileExplorer(Pyboard):
             raise IOError("Filed to compile: %s" % src)
 
 
+# =============================================================================
 class MpFileExplorerCaching(MpFileExplorer):
     def __init__(self, constr, reset=False):
         MpFileExplorer.__init__(self, constr, reset)
 
         self.cache = {}
 
+    # -------------------------------------------------------------------------
     def __cache(self, path, data):
 
         logging.debug("caching '%s': %s" % (path, data))
         self.cache[path] = data
 
+    # -------------------------------------------------------------------------
     def __cache_hit(self, path):
 
         if path in self.cache:
@@ -512,6 +540,7 @@ class MpFileExplorerCaching(MpFileExplorer):
 
         return None
 
+    # -------------------------------------------------------------------------
     def ls(self, add_files=True, add_dirs=True, add_details=False):
 
         hit = self.__cache_hit(self.dir)
@@ -530,6 +559,7 @@ class MpFileExplorerCaching(MpFileExplorer):
             files = [f[0] for f in files]
         return files
 
+    # -------------------------------------------------------------------------
     def put(self, src, dst=None):
 
         MpFileExplorer.put(self, src, dst)
@@ -547,6 +577,7 @@ class MpFileExplorerCaching(MpFileExplorer):
             if not (dst, "F") in hit:
                 self.__cache(parent, hit + [(newitm, "F")])
 
+    # -------------------------------------------------------------------------
     def puts(self, dst, lines):
 
         MpFileExplorer.puts(self, dst, lines)
@@ -561,6 +592,7 @@ class MpFileExplorerCaching(MpFileExplorer):
             if not (dst, "F") in hit:
                 self.__cache(parent, hit + [(newitm, "F")])
 
+    # -------------------------------------------------------------------------
     def md(self, dir):
 
         MpFileExplorer.md(self, dir)
@@ -575,6 +607,7 @@ class MpFileExplorerCaching(MpFileExplorer):
             if not (dir, "D") in hit:
                 self.__cache(parent, hit + [(newitm, "D")])
 
+    # -------------------------------------------------------------------------
     def rm(self, target):
 
         MpFileExplorer.rm(self, target)
