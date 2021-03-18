@@ -57,6 +57,12 @@ class Ui_MainWindow(object):
         self.lineEdit_srcpath = QtWidgets.QLineEdit(self.centralwidget)
         self.lineEdit_srcpath.setGeometry(QtCore.QRect(480, 40, 391, 20))
         self.lineEdit_srcpath.setObjectName("lineEdit_srcpath")
+        self.lineEdit_webrepl_ip = QtWidgets.QLineEdit(self.centralwidget)
+        self.lineEdit_webrepl_ip.setGeometry(QtCore.QRect(580, 10, 291, 20))
+        self.lineEdit_webrepl_ip.setObjectName("lineEdit_webrepl_ip")
+        self.pushButton_webrepl = QtWidgets.QPushButton(self.centralwidget)
+        self.pushButton_webrepl.setGeometry(QtCore.QRect(480, 10, 91, 23))
+        self.pushButton_webrepl.setObjectName("pushButton_webrepl")
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 895, 21))
@@ -80,4 +86,5 @@ class Ui_MainWindow(object):
         self.radioButton_replmode.setText(_translate("MainWindow", "REPL mode"))
         self.label_comport.setText(_translate("MainWindow", "COM: "))
         self.label_srcpath.setText(_translate("MainWindow", "Source path"))
+        self.pushButton_webrepl.setText(_translate("MainWindow", "webrepl"))
 from qt5_repl_gui import MicroPythonREPLPane

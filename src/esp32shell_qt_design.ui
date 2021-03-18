@@ -171,6 +171,29 @@
      </rect>
     </property>
    </widget>
+   <widget class="QLineEdit" name="lineEdit_webrepl_ip">
+    <property name="geometry">
+     <rect>
+      <x>580</x>
+      <y>10</y>
+      <width>291</width>
+      <height>20</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_webrepl">
+    <property name="geometry">
+     <rect>
+      <x>480</x>
+      <y>10</y>
+      <width>91</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>webrepl</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -188,7 +211,7 @@
   <customwidget>
    <class>MicroPythonREPLPane</class>
    <extends>QTextEdit</extends>
-   <header location="global">repl_gui.h</header>
+   <header location="global">qt5_repl_gui.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

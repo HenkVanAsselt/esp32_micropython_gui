@@ -105,7 +105,7 @@ def set_sourcefolder(folder) -> bool:
         return False
 
     param.config['src']['srcpath'] = str(foldername)
-    print(f"Changed sourcefolder to {foldername}")
+    debug(f"Set sourcefolder to {foldername}")
     saveconfig(param.config)
     return True
 
@@ -128,13 +128,18 @@ def get_sourcefolder() -> pathlib.Path:
 # -----------------------------------------------------------------------------
 @dumpArgs
 def local_run(cmdstr) -> bool:
-    """Run a local command, for example to start the editor
+    """Run a local command, for example to start the editor.
+
+    This function will only run the command, it does not return stdout and/or stderr
+
+    :param cmdstr: The command to execute.
+    :returns: True in case of a normal termination of the command, False in case of an error.
     """
 
     try:
         retcode = subprocess.call(cmdstr, shell=False)
         if retcode < 0:
-            debug("Child was terminated by signal", -retcode, file=sys.stderr)
+            debug(f"Child was terminated by signal -{retcode}")
             return True
         debug(f"Child returned {retcode=}")
         return True
@@ -143,10 +148,13 @@ def local_run(cmdstr) -> bool:
         print("Execution failed:", error, file=sys.stderr)
         return False
 
+
 # -----------------------------------------------------------------------------
 @dumpArgs
-def local_exec(command_list) -> bool:
+def local_exec(command_list) -> tuple:
     """"Run a local command, for example to start the editor.
+
+    This function will also return the stdout and stderr results.
 
     :param command_list: List of commands
     :returns: tuple of stdout and stderr results

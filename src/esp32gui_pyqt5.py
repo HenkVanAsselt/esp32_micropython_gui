@@ -71,6 +71,37 @@ def miniterm(port) -> tuple:
 
 
 # -----------------------------------------------------------------------------
+def save_command_list(cmdlist: list, filename='gui_cmd_history.txt') -> bool:
+    """Save list of commands entered in the GUI to a file.
+    This makes it possible to reload it later.
+
+    :param cmdlist: List of commands to save
+    :param filename: Name of the file to save the commands to
+    :returns: True on success, False in case of an error.
+    """
+
+    with open(filename, 'w') as f:
+        for s in cmdlist:
+            f.write(s + '\n')
+    return True
+
+
+# -----------------------------------------------------------------------------
+def load_command_list(filename='gui_cmd_history.txt') -> list:
+    """Load a list of commands previously entered.
+
+    :param filename: Name of the file to load the commands from
+    :returns: List of loaded commands.
+    """
+
+    with open(filename, 'r') as f:
+        cmdlist = f.readlines()
+
+    stripped_list = [cmd.strip() for cmd in cmdlist]
+    return stripped_list
+
+
+# -----------------------------------------------------------------------------
 class MainWindow(QMainWindow):
     """QT Main Window"""
 
@@ -92,14 +123,23 @@ class MainWindow(QMainWindow):
 
         # After a new sourcepath is entered (and ENTER is pressed), react on it
         self.ui.lineEdit_srcpath.returnPressed.connect(self.get_ui_properties)
+        self.ui.lineEdit_webrepl_ip.returnPressed.connect(self.get_ui_properties)
 
+        # Load the list of previous commands from the file in which they were saved.
+        self.list_of_commands = list(set(load_command_list()))
+        for cmd_str in self.list_of_commands:
+            s = cmd_str.strip()
+            if s:
+                self.ui.commandlist.addItem(s)
         # If a command from the list of commands is clicked, execute it
-        self.list_of_commands = []
         self.ui.commandlist.itemClicked.connect(self.do_clicked_command)
 
         # Handle the switch from repl mode to command mode and visa versa
         self.ui.radioButton_commandmode.clicked.connect(self.change_to_command_mode)
         self.ui.radioButton_replmode.clicked.connect(self.change_to_repl_mode)
+
+        # Handle the buttonclick for webrepl mode
+        self.ui.pushButton_webrepl.clicked.connect(self.webrepl)
 
         # Read configuration
         self.config = esp32common.readconfig("esp32cli.ini")
@@ -170,7 +210,7 @@ class MainWindow(QMainWindow):
         self.ui.text_output.update()
 
     @staticmethod
-    def flush(self) -> None:
+    def flush() -> None:
         """Handle sys.stdout.flush: do nothing
 
         :return: Nothing
@@ -282,7 +322,7 @@ class MainWindow(QMainWindow):
             self.mode = MODE_COMMAND
             return self.mode
 
-        elif method == MINITERM:
+        if method == MINITERM:
             miniterm("COM4")
             self.show_text("Miniterm has been terminated\n")
             self.mode = MODE_COMMAND
@@ -293,13 +333,28 @@ class MainWindow(QMainWindow):
         return self.mode
 
     # -------------------------------------------------------------------------
+    def webrepl(self) -> None:
+        """Start webrepl in browser
+        """
+
+        debug("webrepl button clicked.")
+        webrepl_ip = self.ui.lineEdit_webrepl_ip.text()
+        esp32cli.webrepl(ip=webrepl_ip)
+
+    # -------------------------------------------------------------------------
     @dumpFuncname
     def get_ui_properties(self) -> None:
-        """Get the values from the UI textfields, checkboxes and radiobuttons"""
+        """Get the values from the UI textfields, checkboxes and radiobuttons
 
-        # Save GUI setting
+        And save them in the configuration file.
+        """
+
+        # Save GUI settings
         srcpath = self.ui.lineEdit_srcpath.text()
         esp32common.set_sourcefolder(srcpath)
+
+        webrepl_ip = self.ui.lineEdit_webrepl_ip.text()
+        self.config["wlan"]["ip"] = webrepl_ip
 
         # Save the (modified configuration file)
         esp32common.saveconfig(self.config)
@@ -309,24 +364,21 @@ class MainWindow(QMainWindow):
     def set_ui_properties(self) -> bool:
         """Get the values from the UI textfields, checkboxes and radiobuttons"""
 
-        try:
+        # Main window properties
+        self.setWindowTitle("ESP32 microPython PyQT5 GUI/Shell")
 
-            # Main window properties
-            self.setWindowTitle("ESP32 microPython PyQT5 GUI/Shell")
+        # Show current uPython source path
+        srcpath = esp32common.get_sourcefolder()
+        self.ui.lineEdit_srcpath.setText(str(srcpath))
 
-            # Show current uPython source path
-            srcpath = esp32common.get_sourcefolder()
-            self.ui.lineEdit_srcpath.setText(str(srcpath))
+        # Show the serial port which will be used
+        port = self.config["com"]["port"]
+        desc = self.config["com"]["desc"]
+        self.show_text(f"Using {port} {desc}\r\n")
+        self.ui.label_comport.setText(f"{port} ({desc}")
 
-            # Show the serial port which will be used
-            port = self.config["com"]["port"]
-            desc = self.config["com"]["desc"]
-            self.show_text(f"Using {port} {desc}\r\n")
-            self.ui.label_comport.setText(f"{port} ({desc}")
-
-        except Exception as err:
-            debug(err)
-            return False
+        webrepl_ip = self.config["wlan"]["ip"]
+        self.ui.lineEdit_webrepl_ip.setText(webrepl_ip)
 
         return True
 
@@ -437,10 +489,14 @@ class MainWindow(QMainWindow):
             print(f"{err=}")
 
         # If this command is not in the list of commands entered till now,
-        # add it.
-        if cmd_str not in self.list_of_commands:
-            self.list_of_commands.append(cmd_str)
-            self.ui.commandlist.addItem(cmd_str)
+        # add it and save the list in a text file.
+        if cmd_str.strip() not in self.list_of_commands:
+            self.list_of_commands.append(cmd_str.strip())
+            self.ui.commandlist.addItem(cmd_str.strip())
+
+            with open('gui_cmd_history.txt', 'w') as f:
+                for s in self.list_of_commands:
+                    f.write(s.strip() + '\n')
 
 
 # -----------------------------------------------------------------------------
