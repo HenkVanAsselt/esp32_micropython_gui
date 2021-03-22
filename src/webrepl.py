@@ -230,7 +230,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--password",
         help="esp32 webrepl password",
-        default="daan3006"
+        default="yourpassword"
     )
 
     args = parser.parse_args()
