@@ -1,3 +1,6 @@
+"""Connection base class
+"""
+
 ##
 # The MIT License (MIT)
 #

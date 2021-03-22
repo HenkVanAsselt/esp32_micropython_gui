@@ -34,7 +34,7 @@ import sys
 import tempfile
 import pathlib
 import functools
-import webbrowser
+
 
 # 3rd party imports
 import cmd2  # type: ignore
@@ -55,6 +55,7 @@ from mp.pyboard import PyboardError
 from mp.tokenizer import Tokenizer
 import esp32common
 from lib.helper import debug, dumpFuncname, dumpArgs
+import webrepl
 
 
 # -----------------------------------------------------------------------------
@@ -137,53 +138,6 @@ def write_flash_with_binfile(comport="COM5", binfile=None) -> bool:
     # this external command in a different way
     ret = esp32common.local_run(cmdstr)
     return ret
-
-
-# -------------------------------------------------------------------------
-@dumpArgs
-def webrepl(ip="") -> bool:
-    """Start webrepl client
-
-    :param ip: IP address and optional portnumber to connect to
-    :returns: True on success, False in case of an error
-
-    The IP address and portnumber can be given like
-    '192.168.178.149'   (which will use the default port 8266)
-    '192.168.178.149:1111' (which will use portnumber 1111)
-    """
-
-    # Check if we can find the esptool executable
-    webrepl_client = pathlib.Path("../bin/webrepl-client/webrepl.html").resolve()
-    if not webrepl_client.is_file():
-        print(f"Error: Could not find {str(webrepl_client)}")
-        return False
-
-    if not ip:
-        print("Error: Could not obtain WLAN ip address")
-        return False
-
-    # If no portnumber was given, use the default port 8266
-    if ":" in ip:
-        ip, port = ip.split(':', maxsplit=2)
-    else:
-        port = 8266
-
-    print(f"Modifyting {str(webrepl_client)}")
-
-    with open(str(webrepl_client), 'r') as input_file:
-        lines = input_file.readlines()
-
-    with open(str(webrepl_client), 'w') as output_file:
-        for line in lines:
-            if line.startswith('<input type="text" name="webrepl_url" id="url" value='):
-                output_file.write(f'<input type="text" name="webrepl_url" id="url" value="ws://{ip}:{port}/" />\n')
-            else:
-                output_file.write(line)
-
-    # Start the webrepl client with the modified IP address
-    print(f"Connecting webrepl client to {ip}")
-    webbrowser.open(f"{webrepl_client}", new=2)
-    return True
 
 
 # =============================================================================
@@ -438,7 +392,7 @@ class ESPShell(cmd2.Cmd):
         try:
             self.remote_exec("from network import WLAN")
             self.remote_exec("wlan=WLAN()")
-            ret = self.remote_exec("print(wlan.ifconfig()[2])")
+            ret = self.remote_exec("print(wlan.ifconfig()[0])")
             ip = ret.decode("utf-8")
             return ip
         except Exception as err:
@@ -504,6 +458,7 @@ class ESPShell(cmd2.Cmd):
     def do_close(self, _args):
         """Close connection to device."""
         self.__disconnect()
+        print("Connection has been closed.")
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
@@ -999,7 +954,7 @@ class ESPShell(cmd2.Cmd):
         #     self.__error(str(e))
 
     # -------------------------------------------------------------------------
-    @cmd2.with_category(CMD_CAT_FILES)
+    @cmd2.with_category(CMD_CAT_RUN)
     def do_run(self, statement):
         """Run the given local file on the connected device"""
 
@@ -1026,7 +981,7 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     @must_be_connected
-    @cmd2.with_category(CMD_CAT_RUN)
+    @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_repl(self, _args):
         """repl = Enter Micropython REPL."""
 
@@ -1129,7 +1084,7 @@ class ESPShell(cmd2.Cmd):
     #     return [i for i in files if i.startswith(args[0])]
 
     # -------------------------------------------------------------------------
-    @cmd2.with_category(CMD_CAT_RUN)
+    @cmd2.with_category(CMD_CAT_FILES)
     def do_putc(self, statement):
         """mputc <LOCAL PYTHON FILE> [<REMOTE FILE>]
         Compile a Python file into byte-code by using mpy-cross (which needs to be in the
@@ -1183,7 +1138,7 @@ class ESPShell(cmd2.Cmd):
     # complete_putc = complete_mpyc
 
     # -------------------------------------------------------------------------
-    @cmd2.with_category(CMD_CAT_FILES)
+    @cmd2.with_category(CMD_CAT_EDIT)
     def do_edit(self, statement):
         """Edit a file on the remote device.
 
@@ -1236,7 +1191,7 @@ class ESPShell(cmd2.Cmd):
                 debug(f"{local_filename} was not modified")
 
     # -------------------------------------------------------------------------
-    @cmd2.with_category(CMD_CAT_FILES)
+    @cmd2.with_category(CMD_CAT_EDIT)
     def do_ledit(self, statement):
         """Locally edit a file in the local source folder on the PC.
 
@@ -1397,41 +1352,6 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
-    def do_testflash(self, _statement):
-        """flash <BINFILE>
-
-        Flash the connected device with the given bin file.
-        This function uses the ../bin/esptool.exe for the actual flashing
-        """
-
-        if param.is_gui:
-            try:
-                param.worker.run_command("ping 127.0.0.1")
-            except Exception as err:
-                print(err)
-        else:
-            cmdstr = "ping 127.0.0.1"
-            esp32common.local_run(cmdstr)
-
-        if param.is_gui:
-            while param.worker.active:
-                # print("Wait till current worker is finished")
-                # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
-                loop = QEventLoop()
-                QTimer.singleShot(250, loop.quit)
-                loop.exec_()
-
-        if param.is_gui:
-            try:
-                param.worker.run_command("ping 192.168.178.1")
-            except Exception as err:
-                print(err)
-        else:
-            cmdstr = "ping 127.0.0.1"
-            esp32common.local_run(cmdstr)
-
-    # -------------------------------------------------------------------------
-    @cmd2.with_category(CMD_CAT_FILES)
     def do_eraseflash(self, _statement) -> None:
         """Erase the flash memory of the connected device.
         """
@@ -1451,7 +1371,7 @@ class ESPShell(cmd2.Cmd):
         if statement.args:
             ip = statement.args
             # self.__disconnect() # Close the current connection over USB. @todo: figure out if this is neccessary.
-            webrepl(ip)    # Open webrepl link over network/wifi
+            webrepl.start_webrepl_html(ip)    # Open webrepl link over network/wifi
         else:
             print("No IP address for webrepl connection was given")
             return
@@ -1460,8 +1380,7 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_getip(self, _statement) -> None:
-        """Get IP address of the connected device
-
+        """Get IP address of the connected device.
         """
 
         ip = self.get_ip()
@@ -1469,7 +1388,7 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     @must_be_connected
-    @cmd2.with_category(CMD_CAT_CONNECTING)
+    @cmd2.with_category(CMD_CAT_REBOOT)
     def do_softreset(self, _statement) -> None:
         """Soft reset the device, equivalent with CTRL+D in repl.
         """
@@ -1480,7 +1399,7 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     @must_be_connected
-    @cmd2.with_category(CMD_CAT_CONNECTING)
+    @cmd2.with_category(CMD_CAT_REBOOT)
     def do_hardreset(self, _statement) -> None:
         """Soft reset the device, equivalent with pressing the external RESET button.
         """

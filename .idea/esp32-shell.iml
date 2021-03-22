@@ -14,6 +14,9 @@
     <orderEntry type="jdk" jdkName="Python 3.8 (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
+  <component name="PackageRequirementsSettings">
+    <option name="keepMatchingSpecifier" value="false" />
+  </component>
   <component name="ReSTService">
     <option name="DOC_DIR" value="$MODULE_DIR$" />
   </component>

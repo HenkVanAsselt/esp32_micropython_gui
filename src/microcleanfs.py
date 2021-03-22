@@ -32,7 +32,7 @@ from ampy.files import Files
 from ampy.pyboard import Pyboard, PyboardError
 from docopt import docopt
 
-
+# -----------------------------------------------------------------------------
 def main(args: List[str]) -> None:
     opts = docopt(__doc__, argv=args)
     port = opts['PORT']
@@ -69,11 +69,15 @@ def main(args: List[str]) -> None:
     print('Done')
 
 
+# -----------------------------------------------------------------------------
 def wait_for_board() -> None:
-    """Wait for some ESP8266 devices to become ready for REPL commands."""
+    """Wait for time.
+    Some ESP8266 devices need time to become ready for REPL commands.
+    """
     time.sleep(0.5)
 
 
+# =============================================================================
 if __name__ == '__main__':
     try:
         main(sys.argv[1:])

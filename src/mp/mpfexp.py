@@ -102,16 +102,23 @@ class MpFileExplorer(Pyboard):
             self.exit_raw_repl()
         except Exception as err:
             debug("Failure in self.exit_raw_repl()")
-            debug(f"Exeption: {err}")
+            debug(f"Exception: {err}")
 
         try:
             self.close()
             debug("Failure in self.close()")
         except Exception as err:
-            debug(f"Exeption: {err}")
+            debug(f"Exception: {err}")
 
     # -------------------------------------------------------------------------
     def __con_from_str(self, constr):
+        """Create a connection, based on the given connection string.
+
+        This string must start with 'ser:', 'tn:', 'ws:'
+
+        :param constr: connection string.
+        :returns: The created connection
+        """
 
         con = None
 

@@ -8,10 +8,13 @@ ConfigArgParse
 PySide2
 PyQT5
 PyQt5Designer
+websocket-client
+loguru
+selenium
+keyboard
 
 # Micropython specific
 mpy-cross
-
 
 # To create an installer / .exe
 pyinstaller
@@ -23,3 +26,4 @@ colorama
 Sphinx
 sphinx_rtd_theme
 recommonmark
+docopt
