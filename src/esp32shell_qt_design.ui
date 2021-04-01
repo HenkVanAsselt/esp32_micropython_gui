@@ -176,9 +176,12 @@
      <rect>
       <x>580</x>
       <y>10</y>
-      <width>291</width>
+      <width>161</width>
       <height>20</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string extracomment="webrepl IP address"/>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_webrepl">
@@ -192,6 +195,19 @@
     </property>
     <property name="text">
      <string>webrepl</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_webrepl_password">
+    <property name="geometry">
+     <rect>
+      <x>750</x>
+      <y>10</y>
+      <width>121</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string extracomment="webrepl password"/>
     </property>
    </widget>
   </widget>

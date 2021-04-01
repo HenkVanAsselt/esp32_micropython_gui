@@ -32,22 +32,22 @@ PUTTY = 2
 MINITERM = 3
 
 
-# -----------------------------------------------------------------------------
-def putty(port) -> tuple:
-    """Run putty.exe with the given arguments
-
-    :param port: Com port to use (string)
-    :returns: tuple of stdout and stderr text
-    """
-
-    command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
-    debug(f"Calling {' '.join(command_list)}")
-
-    proc = subprocess.Popen(
-        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = proc.communicate(input=b"\r\n")
-    return out.decode(), err.decode()
+# # -----------------------------------------------------------------------------
+# def putty(port) -> tuple:
+#     """Run putty.exe with the given arguments
+#
+#     :param port: Com port to use (string)
+#     :returns: tuple of stdout and stderr text
+#     """
+#
+#     command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
+#     debug(f"Calling {' '.join(command_list)}")
+#
+#     proc = subprocess.Popen(
+#         command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+#     )
+#     out, err = proc.communicate(input=b"\r\n")
+#     return out.decode(), err.decode()
 
 
 # -----------------------------------------------------------------------------
@@ -71,17 +71,17 @@ def miniterm(port) -> tuple:
 
 
 # -----------------------------------------------------------------------------
-def save_command_list(cmdlist: list, filename='gui_cmd_history.txt') -> bool:
+def save_command_list(list_of_commands: list, filename='gui_cmd_history.txt') -> bool:
     """Save list of commands entered in the GUI to a file.
     This makes it possible to reload it later.
 
-    :param cmdlist: List of commands to save
+    :param list_of_commands: List of commands to save
     :param filename: Name of the file to save the commands to
     :returns: True on success, False in case of an error.
     """
 
     with open(filename, 'w') as f:
-        for s in cmdlist:
+        for s in list_of_commands:
             f.write(s + '\n')
     return True
 
@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         # After a new sourcepath is entered (and ENTER is pressed), react on it
         self.ui.lineEdit_srcpath.returnPressed.connect(self.get_ui_properties)
         self.ui.lineEdit_webrepl_ip.returnPressed.connect(self.get_ui_properties)
+        self.ui.lineEdit_webrepl_password.returnPressed.connect(self.get_ui_properties)
 
         # Load the list of previous commands from the file in which they were saved.
         self.list_of_commands = list(set(load_command_list()))
@@ -133,6 +134,8 @@ class MainWindow(QMainWindow):
                 self.ui.commandlist.addItem(s)
         # If a command from the list of commands is clicked, execute it
         self.ui.commandlist.itemClicked.connect(self.do_clicked_command)
+        # If a command from the list of commands is double-clicked, remove it
+        self.ui.commandlist.itemDoubleClicked.connect(self.do_doubleclicked_command)
 
         # Handle the switch from repl mode to command mode and visa versa
         self.ui.radioButton_commandmode.clicked.connect(self.change_to_command_mode)
@@ -251,6 +254,28 @@ class MainWindow(QMainWindow):
             return
 
     # -------------------------------------------------------------------------
+    def change_backgrounds_to_current_mode(self) -> None:
+        """Set windows backgrounds to current mode
+        :returns: Nothing
+        """
+
+        debug("Changing background settings")
+
+        if self.mode == MODE_COMMAND:
+            debug("mode_COMMAND background settings")
+            self.ui.ReplPane.setStyleSheet("background-color: lightGray; color: black")
+            self.ui.commandlist.setStyleSheet("background-color: white; color: black")
+            self.ui.text_output.setStyleSheet("background-color: white; color: black")
+            return
+
+        if self.mode == MODE_REPL:
+            debug("MODE_REPL background settings")
+            self.ui.ReplPane.setStyleSheet("background-color: white; color: black")
+            self.ui.commandlist.setStyleSheet("background-color: lightGray; color: black")
+            self.ui.text_output.setStyleSheet("background-color: lightGray; color: black")
+            return
+
+    # -------------------------------------------------------------------------
     def change_to_command_mode(self) -> int:
         """Switch from serial repl to serial command mode.
         :returns: New mode (MODE_COMMAND or MODE_REPL)
@@ -265,6 +290,7 @@ class MainWindow(QMainWindow):
 
         self.mode = MODE_COMMAND
         self.change_radiobuttons_to_current_mode()
+        self.change_backgrounds_to_current_mode()
 
         # Stop the REPL connection if that is active
         if self.repl_connection.serial:
@@ -303,6 +329,7 @@ class MainWindow(QMainWindow):
 
         self.mode = MODE_REPL
         self.change_radiobuttons_to_current_mode()
+        self.change_backgrounds_to_current_mode()
 
         if method == INTERNAL:
             if not self.repl_connection.is_connected:
@@ -316,17 +343,17 @@ class MainWindow(QMainWindow):
             self.repl_connection.send_exit_raw_mode()
             return MODE_REPL
 
-        if method == PUTTY:
-            putty("COM4:")
-            self.show_text("Putty has been terminated\n")
-            self.mode = MODE_COMMAND
-            return self.mode
-
-        if method == MINITERM:
-            miniterm("COM4")
-            self.show_text("Miniterm has been terminated\n")
-            self.mode = MODE_COMMAND
-            return self.mode
+        # if method == PUTTY:
+        #     esp32common.putty("COM4:")
+        #     self.show_text("Putty has been terminated\n")
+        #     self.mode = MODE_COMMAND
+        #     return self.mode
+        #
+        # if method == MINITERM:
+        #     miniterm("COM4")
+        #     self.show_text("Miniterm has been terminated\n")
+        #     self.mode = MODE_COMMAND
+        #     return self.mode
 
         print(f"Unknown repl {method=}")
         self.mode = MODE_COMMAND
@@ -337,9 +364,19 @@ class MainWindow(QMainWindow):
         """Start webrepl in browser
         """
 
+        import webrepl
+
         debug("webrepl button clicked.")
         webrepl_ip = self.ui.lineEdit_webrepl_ip.text()
-        esp32cli.webrepl(ip=webrepl_ip)
+
+        # This was the original way. Does not enter password automatically...
+        # webrepl.start_webrepl_html(ip=webrepl_ip)
+
+        url = webrepl.ip_to_url(webrepl_ip)
+        debug(f"{url=}")
+        webrepl_password = self.ui.lineEdit_webrepl_password.text()
+        debug(f"{webrepl_password=}")
+        webrepl.start_webrepl_with_selenium(url, password=webrepl_password)  # Open webrepl link over network/wifi
 
     # -------------------------------------------------------------------------
     @dumpFuncname
@@ -354,7 +391,10 @@ class MainWindow(QMainWindow):
         esp32common.set_sourcefolder(srcpath)
 
         webrepl_ip = self.ui.lineEdit_webrepl_ip.text()
-        self.config["wlan"]["ip"] = webrepl_ip
+        self.config["webrepl"]["ip"] = webrepl_ip
+
+        webrepl_password = self.ui.lineEdit_webrepl_password.text()
+        self.config["webrepl"]["password"] = webrepl_password
 
         # Save the (modified configuration file)
         esp32common.saveconfig(self.config)
@@ -377,8 +417,11 @@ class MainWindow(QMainWindow):
         self.show_text(f"Using {port} {desc}\r\n")
         self.ui.label_comport.setText(f"{port} ({desc}")
 
-        webrepl_ip = self.config["wlan"]["ip"]
+        webrepl_ip = self.config["webrepl"]["ip"]
         self.ui.lineEdit_webrepl_ip.setText(webrepl_ip)
+
+        webrepl_password = self.config["webrepl"]["password"]
+        self.ui.lineEdit_webrepl_password.setText(webrepl_password)
 
         return True
 
@@ -421,6 +464,28 @@ class MainWindow(QMainWindow):
         cmd = item.text()
         # debug(f"do_entered command {cmd=}")
         self.do_command(cmd_str=cmd)
+
+    # -------------------------------------------------------------------------
+    def do_doubleclicked_command(self, item) -> None:
+        """Remove the item which was double-clicked.
+
+        :param item: The item which was doubleclicked.
+        :returns: Nothing
+
+        """
+
+        debug(f"{item=} was double-clicked")
+        cmd = item.text().strip()
+        index = self.list_of_commands.index(cmd)
+        debug(f"Found {cmd} at index {index}")
+        self.list_of_commands.remove(cmd)
+        save_command_list(self.list_of_commands)    # Save the new list in a file
+
+        debug("Removing item from commandlist")
+        row = self.ui.commandlist.row(item)
+        debug(f"Removing {row=}")
+        self.ui.commandlist.takeItem(row)
+
 
     # -------------------------------------------------------------------------
     def do_entered_command(self) -> None:
@@ -493,10 +558,7 @@ class MainWindow(QMainWindow):
         if cmd_str.strip() not in self.list_of_commands:
             self.list_of_commands.append(cmd_str.strip())
             self.ui.commandlist.addItem(cmd_str.strip())
-
-            with open('gui_cmd_history.txt', 'w') as f:
-                for s in self.list_of_commands:
-                    f.write(s.strip() + '\n')
+            save_command_list(self.list_of_commands)
 
 
 # -----------------------------------------------------------------------------

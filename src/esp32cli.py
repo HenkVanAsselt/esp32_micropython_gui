@@ -52,7 +52,7 @@ from mp.mpfexp import MpFileExplorer
 from mp.mpfexp import MpFileExplorerCaching
 from mp.mpfexp import RemoteIOError
 from mp.pyboard import PyboardError
-from mp.tokenizer import Tokenizer
+# from mp.tokenizer import Tokenizer
 import esp32common
 from lib.helper import debug, dumpFuncname, dumpArgs
 import webrepl
@@ -149,10 +149,11 @@ class ESPShell(cmd2.Cmd):
     CMD_CAT_CONNECTING = "Connections"
     CMD_CAT_FILES = "Files and folders"
     CMD_CAT_EDIT = "Edit settings"
-    CMD_CAT_INFO = "Information"
+    CMD_CAT_WLAN = "WLAN related functions"
     CMD_CAT_DEBUG = "Debug and test"
     CMD_CAT_REBOOT = "Reboot related commands"
     CMD_CAT_RUN = "Execution commands"
+    CMD_CAT_REPL = "REPL related functions"
 
     def __init__(self, color=False, caching=False, reset=False, port=""):
 
@@ -185,7 +186,7 @@ class ESPShell(cmd2.Cmd):
         debug(f"In ESPShell.__init__() {self.port=}")
         self.fe = None
         self.repl = None
-        self.tokenizer = Tokenizer()
+        # self.tokenizer = Tokenizer()
 
         self.__intro()
         self.__set_prompt_path()
@@ -331,17 +332,6 @@ class ESPShell(cmd2.Cmd):
             self.__error("Not connected to device. Use 'open' first.")
             return False
         return True
-
-    # # -------------------------------------------------------------------------
-    # def __parse_file_names(self, args):
-    #
-    #     tokens, rest = self.tokenizer.tokenize(args)
-    #
-    #     if rest != "":
-    #         self.__error("Invalid filename given: %s" % rest)
-    #     else:
-    #         return [token.value for token in tokens]
-    #     return None
 
     # -------------------------------------------------------------------------
     def remote_exec(self, command: str) -> bytes:
@@ -981,9 +971,10 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     @must_be_connected
-    @cmd2.with_category(CMD_CAT_CONNECTING)
+    @cmd2.with_category(CMD_CAT_REPL)
     def do_repl(self, _args):
-        """repl = Enter Micropython REPL."""
+        """Enter Micropython REPL over serial connection
+        """
 
         if not self.repl:
 
@@ -1359,7 +1350,24 @@ class ESPShell(cmd2.Cmd):
         erase_flash(comport=self.port)
 
     # -------------------------------------------------------------------------
-    @cmd2.with_category(CMD_CAT_CONNECTING)
+    @cmd2.with_category(CMD_CAT_REPL)
+    def do_putty(self, _statement) -> None:
+        """Erase the flash memory of the connected device.
+        """
+
+        import time
+
+        self.__disconnect()     # To free the COM port
+        time.sleep(0.2)
+
+        esp32common.putty(self.port)
+
+        print(f"--- Connecting again to {self.port=}")
+        self.do_open(self.port)
+
+    # -------------------------------------------------------------------------
+    @cmd2.with_category(CMD_CAT_WLAN)
+    @cmd2.with_category(CMD_CAT_REPL)
     def do_webrepl(self, statement) -> None:
         """Start webrepl client
 
@@ -1368,17 +1376,24 @@ class ESPShell(cmd2.Cmd):
         '192.168.178.149:1111' (which will use portnumber 1111)
         """
 
-        if statement.args:
-            ip = statement.args
+        if statement.arg_list:
+            ip = statement.arg_list[0]
+            if len(statement.arg_list) > 1:
+                password = statement.arg_list[1]
+            else:
+                password = "daan3006"
             # self.__disconnect() # Close the current connection over USB. @todo: figure out if this is neccessary.
-            webrepl.start_webrepl_html(ip)    # Open webrepl link over network/wifi
+            # webrepl.start_webrepl_html(ip)    # Open webrepl link over network/wifi
+            url = webrepl.ip_to_url(ip)
+            debug(f"{url=}")
+            webrepl.start_webrepl_with_selenium(url, password=password)    # Open webrepl link over network/wifi
         else:
             print("No IP address for webrepl connection was given")
             return
 
     # -------------------------------------------------------------------------
     @must_be_connected
-    @cmd2.with_category(CMD_CAT_CONNECTING)
+    @cmd2.with_category(CMD_CAT_WLAN)
     def do_getip(self, _statement) -> None:
         """Get IP address of the connected device.
         """

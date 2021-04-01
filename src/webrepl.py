@@ -25,24 +25,27 @@ from selenium.webdriver.common.keys import Keys
 # local imports
 from lib.helper import dumpArgs, debug
 
+global browser
+
 
 # -----------------------------------------------------------------------------
-def get_webrepl_client_location() -> str:
-    """Get the full path to the webrepl client html file."""
+def find_webrepl_html_file() -> str:
+    """Get the full path to the webrepl client html file.
+    """
 
-    # Check if we can find the esptool executable
     webrepl_client = pathlib.Path("../bin/webrepl-client/webrepl.html").resolve()
+
     if not webrepl_client.is_file():
         print(f"Error: Could not find {str(webrepl_client)}")
-        return str(webrepl_client)
-    else:
         return ""
+
+    return str(webrepl_client)
 
 
 # -----------------------------------------------------------------------------
 @dumpArgs
 def start_webrepl_html(ip="") -> bool:
-    """Start webrepl client
+    """Start webrepl client after modifying it's contents to connect to the given ip
 
     :param ip: IP address and optional portnumber to connect to
     :returns: True on success, False in case of an error
@@ -53,39 +56,58 @@ def start_webrepl_html(ip="") -> bool:
     """
 
     # Check if we can find the esptool executable
-    webrepl_client = pathlib.Path("../bin/webrepl-client/webrepl.html").resolve()
-    if not webrepl_client.is_file():
-        print(f"Error: Could not find {str(webrepl_client)}")
+    webrepl_html_file = find_webrepl_html_file()
+    if not webrepl_html_file:
+        print(f"Error: Could not find webrepl.html")
         return False
 
     if not ip:
-        print("Error: Could not obtain WLAN ip address")
+        print("Error: No WLAN ip address has been given.")
         return False
 
-    # If no portnumber was given, use the default port 8266
-    if ":" in ip:
-        ip, port = ip.split(":", maxsplit=2)
-    else:
-        port = 8266
+    url = ip_to_url(ip)
 
-    print(f"Modifyting {str(webrepl_client)}")
+    print(f"Modifying {webrepl_html_file}")
 
-    with open(str(webrepl_client), "r") as input_file:
+    with open(webrepl_html_file, "r") as input_file:
         lines = input_file.readlines()
 
-    with open(str(webrepl_client), "w") as output_file:
+    with open(webrepl_html_file, "w") as output_file:
         for line in lines:
             if line.startswith('<input type="text" name="webrepl_url" id="url" value='):
                 output_file.write(
-                    f'<input type="text" name="webrepl_url" id="url" value="ws://{ip}:{port}/" />\n'
+                    f'<input type="text" name="webrepl_url" id="url" value="{url}" />\n'
                 )
             else:
                 output_file.write(line)
 
     # Start the webrepl client with the modified IP address
     print(f"Connecting webrepl client to {ip}")
-    webbrowser.open(f"{webrepl_client}", new=2)
+    webbrowser.open(f"{webrepl_html_file}", new=2)
     return True
+
+
+# -------------------------------------------------------------------------
+@dumpArgs
+def ip_to_url(ip, port="") -> str:
+    """Convert an IP address to a full URL like "ws://192.168.178.149:8266/"
+    :param ip: ip address with optional port number
+    :param port: Optional port number. Could be embedded in the ip address
+    :returns: url string.
+
+    If no portnumber was given, use the default port 8266
+    """
+
+    # If no portnumber was given, use the default port 8266
+    if ":" in ip:
+        ip, port = ip.split(":", maxsplit=2)
+    else:
+        if not port:
+            port = 8266
+
+    url = f"ws://{ip}:{port}/"       # "ws://192.168.178.149:8266/"
+    debug(f"Returning {url=}")
+    return url
 
 
 # -------------------------------------------------------------------------
@@ -100,6 +122,34 @@ def start_session(browser, url) -> None:
     element.clear()
     element.send_keys(url)
     element.send_keys(Keys.RETURN)
+
+
+# -------------------------------------------------------------------------
+@dumpArgs
+def wait_for_welcome_message(browser, interval=0.5, max_retries=10) -> bool:
+    """Wait for the welcome message.
+    :param browser: The selenium browser sessin;
+    :param interval: The time in seconds between each attempt to find the password prompt.
+    :param max_retries: Maximum number of retries.
+    :returns: True in case of success, False in case of an error.
+    """
+
+    element = browser.find_element_by_id("term")
+
+    tries = 0
+    while "Welcome" not in element.text:
+        if tries > max_retries:
+            print(f"ERROR: Execeeded maximum number of {max_retries} tries waiting for welcome message.")
+            return False
+        time.sleep(interval)
+        tries += 1
+        if "Disconnected" in element.text:
+            print("ERROR: webrepl could not succesfully connect to a device.")
+            return False
+    else:
+        print("Welcome message found")
+
+    return True
 
 
 # -------------------------------------------------------------------------
@@ -119,24 +169,25 @@ def enter_password(browser, password: str, interval=0.5, max_retries=10) -> bool
     tries = 0
     while "Password" not in element.text:
         if 'Disconnected' in element.text:
-            debug("Session is disconnected")
+            print("ERROR: webrepl could not succesfully connect to a device.")
             return False
         if tries > max_retries:
-            debug("Execeeded maximum number of tries to find the password prompt")
+            print(f"ERROR: Execeeded maximum number of {max_retries } tries to find the password prompt")
             return False
         time.sleep(interval)
         tries += 1
 
-    debug("Found password prompt")
-    debug(f"Entering {password}")
     keyboard.write(password)
     keyboard.write('\n')
     debug("Password entered")
 
     time.sleep(0.5)
+
     if "Access denied" in element.text:
-        debug(f"Access Denied. Was the \"{password}\" correct?")
+        print(f"Error: Access Denied. Was \"{password}\" the correct password?")
         return False
+    else:
+        print("password has been accepted.")
 
     return True
 
@@ -150,44 +201,71 @@ def wait_for_repl_prompt(browser, max_retries=10) -> bool:
 
     element = browser.find_element_by_id("term")
 
+    if "Access denied" in element.text:
+        print("Error: Access Denied.")
+        return False
+
     tries = 0
     while ">>>" not in element.text:
         tries += 1
         debug(f"{element.text=}")
         time.sleep(0.5)
         if tries > max_retries:
-            debug("Execedded maximum number of tries to find the >>> prompt")
+            print(f"Error: Execeeded maximum number of {max_retries} tries to find the >>> prompt")
             return False
-    debug("Found >>> prompt")
+    else:
+        print("repl prompt found")
+
+    # Just to be sure, exit raw repl mode
+    keyboard.press_and_release('ctrl+b')
+
     return True
 
 
 # -------------------------------------------------------------------------
 @dumpArgs
-def start_webrepl_html(url="", password=""):
+def start_webrepl_with_selenium(url="", password=""):
     """Start webrepl with selenium.
-    :returns: selenium webdriver when successfull, None in case of an error
+
+    In case of 'Access Denied' or no >>> prompt found, the browser window
+    will be closed automatically, else it will stay open for interactive usage.
+
+    :returns: selenium webdriver instance when successfull, None in case of an error
     """
 
     # Check if we can find the esptool executable
-    webrepl_client = pathlib.Path("../bin/webrepl-client/webrepl.html").resolve()
-    if not webrepl_client.is_file():
-        print(f"Error: Could not find {str(webrepl_client)}")
+    webrepl_html_file = find_webrepl_html_file()
+    if not webrepl_html_file:
+        print(f"Error: Could not find webrepl.html")
         return False
-    webpage = str(webrepl_client)
 
     opts = Options()
     opts.headless = False
+
+    # The following should suppress messages like
+    # DevTools listening on ws://127.0.0.1:64030/devtools/browser/abba5851-0de1-4f43-9182-df397a0b4eab
+    opts.add_experimental_option('excludeSwitches', ['enable-logging'])
+
+    # Make 'browser' global.
+    # The side-effect of global is that the browser window will stay open and interactive.
+    global browser
     browser = Chrome(options=opts)
-    browser.get(webpage)
+    browser.get(webrepl_html_file)
 
     start_session(browser, url)
+    success = wait_for_welcome_message(browser)
+    if not success:
+        browser.close()
+        return None
+
     success = enter_password(browser, password)
     if not success:
+        browser.close()
         return None
 
     success = wait_for_repl_prompt(browser)
     if not success:
+        browser.close()
         return None
 
     # Do something here
@@ -200,19 +278,27 @@ def start_webrepl_html(url="", password=""):
 def main(args):
     """main (test function)"""
 
-    debug(f"main arguments = {args=}")
+    # url = f"ws://{args.ip}:{args.port}/"       # "ws://192.168.178.149:8266/"
+    url = ip_to_url(args.ip, args.port)
+    browser = start_webrepl_with_selenium(url=url, password=args.password)
 
-    url = f"ws://{args.ip}:{args.port}/"       # "ws://192.168.178.149:8266/"
-    start_webrepl_html(url=url, password=args.password)
+    if not browser:
+        debug("No browser. Return")
+        return
+
+    element = browser.find_element_by_id("term")
+    if "Disconnected" in element.text:
+        print("ERROR: webrepl could not succesfully connect to a device.")
+        browser.close()
 
 
 # =============================================================================
 if __name__ == "__main__":
 
     import sys
-    import lib.helper
+    from lib.helper import clear_debug_window
 
-    lib.helper.clear_debug_window()
+    clear_debug_window()
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -230,10 +316,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--password",
         help="esp32 webrepl password",
-        default="yourpassword"
+        default="daan3006"
     )
 
-    args = parser.parse_args()
-    debug(f"{args=}")
+    arguments = parser.parse_args()
+    debug(f"{arguments=}")
 
-    sys.exit(main(args))
+    sys.exit(main(arguments))

@@ -175,6 +175,35 @@ def local_exec(command_list) -> tuple:
     return out, err
 
 
+# -----------------------------------------------------------------------------
+def putty(port) -> tuple:
+    """Run putty.exe with the given arguments
+
+    :param port: Com port to use (string)
+    :returns: tuple of stdout and stderr text
+    """
+
+    import time
+    import keyboard
+
+    command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
+    debug(f"Calling {' '.join(command_list)}")
+
+    proc = subprocess.Popen(
+        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+
+    # Wait some time, and then send Ctrl+b to exit raw repl (just to be sure).
+    # We then should see the prompt:
+    # MicroPython v1.14 on 2021-02-02; ESP32 module with ESP32
+    # Type "help()" for more information.
+    time.sleep(0.2)
+    keyboard.press_and_release('ctrl+b')
+
+    out, err = proc.communicate(input=b"\r\n")
+    return out.decode(), err.decode()
+
+
 # ===============================================================================
 if __name__ == "__main__":
 
