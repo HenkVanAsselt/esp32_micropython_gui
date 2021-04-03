@@ -3,7 +3,7 @@
 Uses 'selenium' for the connection and 'keyboard' to enter the password.
 
 Example usage:
-python webrepl.py --ip 192.168.178.149 --port 8266 --password daan3006
+python webrepl.py --ip 192.168.178.149 --port 8266 --password xxxxxxxx
 
 20210322, HenkA
 """
@@ -316,7 +316,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--password",
         help="esp32 webrepl password",
-        default="daan3006"
+        default="xxxxxxxx"
     )
 
     arguments = parser.parse_args()

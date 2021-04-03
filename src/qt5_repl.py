@@ -4,17 +4,15 @@ Uses PyQt5 Serial port functionality.
 """
 
 # Default imports
-import logging
 
-# 3rd paty imports
+
+# 3rd party imports
 from serial import Serial
 from PyQt5.QtCore import QObject, pyqtSignal, QIODevice, QTimer
 from PyQt5.QtSerialPort import QSerialPort
 
 # Local imports
 from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
-
-logger = logging.getLogger(__name__)
 
 ENTER_RAW_MODE = b"\x01"  # CTRL-A
 EXIT_RAW_MODE = b"\x02"  # CTRL-B
@@ -31,7 +29,8 @@ class REPLConnection(QObject):
     data_received = pyqtSignal(bytes)
     connection_error = pyqtSignal(str)
 
-    def __init__(self, port: str, baudrate: int=115200):
+    # -------------------------------------------------------------------------
+    def __init__(self, port: str, baudrate: int = 115200):
         """Intialize this REPL connection class.
 
         :param port: Portname, e.g. COM4
@@ -45,33 +44,43 @@ class REPLConnection(QObject):
         self.is_connected: bool = False
         self.create_serial_port()
 
+    # -------------------------------------------------------------------------
     @dumpFuncname
-    def create_serial_port(self):
+    def create_serial_port(self) -> QSerialPort:
         """Create the serial port
         """
         self.serial = QSerialPort()
         self.serial.setPortName(self._port)
         self.serial.setBaudRate(self._baudrate)
         self.is_connected: bool = False
+        return self.serial
 
+    # -------------------------------------------------------------------------
     @property
     def port(self):
         """Return the name of the port.
         """
+
         if self.serial:
             # perhaps return self.serial.portName()?
             return self._port
-        else:
-            return None
 
+        # else:
+        return None
+
+    # -------------------------------------------------------------------------
     @property
     def baudrate(self):
+        """Get the baudrate.
+        :returns: Current baudrate or None if there was no serial connction defined.
+        """
         if self.serial:
             # perhaps return self.serial.baudRate()
             return self._baudrate
-        else:
-            return None
+        #else:
+        return None
 
+    # -------------------------------------------------------------------------
     @dumpFuncname
     def open(self) -> None:
         """Open the serial REPL link to the connected device.
@@ -81,7 +90,7 @@ class REPLConnection(QObject):
         debug("Connecting to REPL on port: {}".format(self.port))
 
         if not self.serial:
-            self.create_serial_port()
+            self.serial = self.create_serial_port()
             # debug("Created new instance of QSerialPort")
 
         if not self.serial.open(QIODevice.ReadWrite):
@@ -101,16 +110,16 @@ class REPLConnection(QObject):
             self.serial.open(QIODevice.ReadWrite)
         self.serial.readyRead.connect(self._on_serial_read)
 
-        debug(f"Connected to {self.port}")
-        logger.info("Connected to REPL on port: %s" % self.port)
+        debug("Connected to REPL on port: %s" % self.port)
         self.is_connected = True
 
+    # -------------------------------------------------------------------------
     @dumpFuncname
     def close(self) -> None:
         """Close and clean up the currently open serial link.
         :returns: Nothing
         """
-        logger.info("Closing connection to REPL on port: %s" % self.port)
+
         debug(f"Closing repl connection. {self.port=} {self.serial=}")
         if self.serial:
             self.serial.close()
@@ -118,6 +127,7 @@ class REPLConnection(QObject):
             self.serial = None
             self.is_connected = False
 
+    # -------------------------------------------------------------------------
     def _on_serial_read(self) -> None:
         """Called when data is ready to be send from the device.
         """
@@ -125,6 +135,7 @@ class REPLConnection(QObject):
         debug(f"_on_serial_read() Received {data=}")
         self.data_received.emit(data)
 
+    # -------------------------------------------------------------------------
     def read(self) -> bytes:
         """Read the available bytes from the serial port.
         """
@@ -132,6 +143,7 @@ class REPLConnection(QObject):
         debug(f"read() Received {data=}")
         return data
 
+    # -------------------------------------------------------------------------
     def write(self, data: bytes) -> None:
         """Write the given data to the serial port.
         :param data: data to write
@@ -140,6 +152,7 @@ class REPLConnection(QObject):
         debug(f"Serial write {data=}")
         self.serial.write(data)
 
+    # -------------------------------------------------------------------------
     @dumpFuncname
     def send_interrupt(self) -> None:
         """Send interrupt sequence to connected devce.
@@ -151,6 +164,7 @@ class REPLConnection(QObject):
         self.write(EXIT_RAW_MODE)  # CTRL-B
         self.write(KEYBOARD_INTERRUPT)  # CTRL-C
 
+    # -------------------------------------------------------------------------
     @dumpFuncname
     def send_exit_raw_mode(self) -> None:
         """Send interrupt sequence to connected devce.
@@ -161,7 +175,7 @@ class REPLConnection(QObject):
 
         self.write(EXIT_RAW_MODE)  # CTRL-B
 
-
+    # -------------------------------------------------------------------------
     @dumpArgs
     def execute(self, commands: list) -> None:
         """Execute a series of commands over a period of time.
@@ -171,12 +185,13 @@ class REPLConnection(QObject):
         debug(f"execute {commands=}")
         if commands:
             command = commands[0]
-            logger.info("Sending command %s" % command)
+            debug("Sending command %s" % command)
             self.write(command)
             remainder = commands[1:]
             remaining_task = lambda commands=remainder: self.execute(commands)
             QTimer.singleShot(2, remaining_task)
 
+    # -------------------------------------------------------------------------
     @dumpArgs
     def send_commands(self, commands: list) -> None:
         """Send commands to the REPL via raw mode.

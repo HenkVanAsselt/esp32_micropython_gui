@@ -172,7 +172,10 @@ class MpFileExplorer(Pyboard):
 
     # -------------------------------------------------------------------------
     def __set_sysname(self):
-        self.sysname = self.eval("uos.uname()[0]").decode("utf-8")
+        code_to_run_on_device = "uos.uname()[0]"
+        debug(f"in pyboard __set_sysname(), {code_to_run_on_device=}")
+        self.sysname = self.eval(code_to_run_on_device)
+        # self.sysname = self.eval("uos.uname()[0]").decode("utf-8")
         debug(f"{self.sysname=}")
 
     # -------------------------------------------------------------------------
@@ -499,8 +502,10 @@ class MpFileExplorer(Pyboard):
     def md(self, target):
 
         try:
-
-            self.eval("uos.mkdir('%s')" % self._fqn(target))
+            code_to_run_on_device = "uos.mkdir('%s')" % self._fqn(target)
+            debug(f"in pyboard md(), {code_to_run_on_device=}")
+            # self.eval("uos.mkdir('%s')" % self._fqn(target))
+            self.eval(code_to_run_on_device)
 
         except PyboardError as e:
             if _was_file_not_existing(e):

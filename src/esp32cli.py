@@ -101,9 +101,10 @@ def erase_flash(comport="COM5") -> bool:
         except Exception as err:
             print(err)
             return False
-    else:
-        ret = esp32common.local_run(cmdstr)
-        return ret
+
+    # else:
+    ret = esp32common.local_run(cmdstr)
+    return ret
 
 
 # -----------------------------------------------------------------------------
@@ -365,14 +366,15 @@ class ESPShell(cmd2.Cmd):
             # debug(f"in exec, {ret=}")
             if len(ret[-1]):
                 self.__error(ret[-1].decode("utf-8"))
-                return b""
-            else:
-                return ret[0].strip()
+            # else
+            return ret[0].strip()
 
         except IOError as e:
             self.__error(str(e))
         except PyboardError as e:
             self.__error(str(e))
+
+        return b""
 
     # -------------------------------------------------------------------------
     def get_ip(self) -> str:
@@ -549,6 +551,8 @@ class ESPShell(cmd2.Cmd):
         """md <TARGET DIR> or mkdir <TARGET DIR>
         Create new remote directory.
         """
+
+        debug(f"do_md {statement=}")
 
         if not statement.arg_list:
             self.__error("Missing argument: <REMOTE DIR>")
@@ -923,25 +927,23 @@ class ESPShell(cmd2.Cmd):
 
         self.remote_exec(statement.args)
 
-        # def data_consumer(data):
-        #     debug(f"data_consumer({data=})")
-        #     data = str(data.decode("utf-8"))
-        #     sys.stdout.write(data.strip("\x04"))
-        #
-        # debug(f"{statement.args=}")
-        #
-        # try:
-        #     self.fe.exec_raw_no_follow(statement.args + "\n")
-        #     ret = self.fe.follow(None, data_consumer)
-        #     debug(f"{ret=}")
-        #
-        #     if len(ret[-1]):
-        #         self.__error(ret[-1].decode("utf-8"))
-        #
-        # except IOError as e:
-        #     self.__error(str(e))
-        # except PyboardError as e:
-        #     self.__error(str(e))
+    # -------------------------------------------------------------------------
+    @must_be_connected
+    @cmd2.with_category(CMD_CAT_RUN)
+    def do_execfile(self, statement):
+        """Execute a local python file on the remote device.
+        """
+
+        sourcefile = statement.args
+
+        if not pathlib.Path(sourcefile).is_file():
+            self.__error(f"Could not find {sourcefile}")
+            return
+
+        ret = self.fe.execfile(sourcefile).decode("utf8")
+        print(f"execfile returned {ret=}")
+        print(ret)
+
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
@@ -1303,8 +1305,7 @@ class ESPShell(cmd2.Cmd):
                 for available_file in available_files:
                     print(f" * {available_file}")
                 return
-            else:
-                print(f"Using {str(binfile)}")
+            print(f"Using {str(binfile)}")
 
         # Step 1 of 4: Close the current com port
         self.__disconnect()
@@ -1319,25 +1320,7 @@ class ESPShell(cmd2.Cmd):
         if not ret:
             return
 
-        # print(f"Trying to write flash with {binfile}")
-        # cmdstr = f'"{esptool}" --chip esp32 --port COM5: --baud 460800 write_flash -z 0x1000 "{binfile}"'
-        # debug(f"{cmdstr=}")
-        # if param.is_gui:
-        #     param.worker.run_command(cmdstr)
-        #     while param.worker.active:
-        #         # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
-        #         loop = QEventLoop()
-        #         QTimer.singleShot(250, loop.quit)
-        #         loop.exec_()
-        # else:
-        #     esp32common.local_run(cmdstr)
-
-        #
-        # print("Give it some time to initialize")
-        # time.sleep(10)
-
         # Step 4 of 4: Open the com port again
-        # todo: implement variable com port
         print(f"--- Connecting again to {self.port=}")
         self.do_open(self.port)
 
@@ -1505,7 +1488,7 @@ def main():
         debug("args.open is not None")
         if args.board is None:
             if not mpfs.do_open(args.open):
-                return 1
+                return
         else:
             print(
                 "Positional argument ({}) takes precedence over --open.".format(
@@ -1519,7 +1502,7 @@ def main():
     if not args.board:
         debug("if not args.board")
         # Try to find a suitable port and open it
-        port, desc = esp32common.get_active_comport()
+        port, _description = esp32common.get_active_comport()
         print(f"Automatic trying to use {port=}")
         mpfs.do_open(port)
 
@@ -1570,8 +1553,8 @@ def main():
 # =============================================================================
 if __name__ == "__main__":
 
-    import lib.helper
+    from lib import helper
 
-    lib.helper.clear_debug_window()
+    helper.clear_debug_window()
 
     sys.exit(main())

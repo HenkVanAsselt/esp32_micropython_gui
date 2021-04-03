@@ -291,7 +291,7 @@ class MicroPythonREPLPane(QTextEdit):
         Updates the self.device_cursor_position to match that of the device
         for every input received.
         """
-        i = 0
+        i: int = 0
         data = self.decoder.decode(data)
         if len(self.unprocessed_input) > 0:
             # Prepend bytes from last time, that wasn't processed
