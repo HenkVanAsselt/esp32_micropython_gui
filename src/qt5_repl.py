@@ -1,10 +1,13 @@
-"""repl connection class, specifically to be used with PyQT5.
+"""
+qt5_repl.py
+===========
+
+repl connection class, specifically to be used with PyQT5.
 
 Uses PyQt5 Serial port functionality.
 """
 
 # Default imports
-
 
 # 3rd party imports
 from serial import Serial
@@ -47,7 +50,7 @@ class REPLConnection(QObject):
     # -------------------------------------------------------------------------
     @dumpFuncname
     def create_serial_port(self) -> QSerialPort:
-        """Create the serial port
+        """Create the serial port.
         """
         self.serial = QSerialPort()
         self.serial.setPortName(self._port)
@@ -72,6 +75,7 @@ class REPLConnection(QObject):
     @property
     def baudrate(self):
         """Get the baudrate.
+
         :returns: Current baudrate or None if there was no serial connction defined.
         """
         if self.serial:
@@ -117,6 +121,7 @@ class REPLConnection(QObject):
     @dumpFuncname
     def close(self) -> None:
         """Close and clean up the currently open serial link.
+
         :returns: Nothing
         """
 
@@ -146,6 +151,7 @@ class REPLConnection(QObject):
     # -------------------------------------------------------------------------
     def write(self, data: bytes) -> None:
         """Write the given data to the serial port.
+
         :param data: data to write
         :returns: Nothing
         """
@@ -167,7 +173,7 @@ class REPLConnection(QObject):
     # -------------------------------------------------------------------------
     @dumpFuncname
     def send_exit_raw_mode(self) -> None:
-        """Send interrupt sequence to connected devce.
+        """Send interrupt sequence to connected device.
 
         This contains CTRL+B (exit raw mode)
         :returns: Nothing
@@ -176,9 +182,10 @@ class REPLConnection(QObject):
         self.write(EXIT_RAW_MODE)  # CTRL-B
 
     # -------------------------------------------------------------------------
-    @dumpArgs
+    # @dumpArgs
     def execute(self, commands: list) -> None:
         """Execute a series of commands over a period of time.
+
          (scheduling remaining commands to be run in the next iteration of the event loop).
         :returns: Nothing
         """
@@ -192,10 +199,11 @@ class REPLConnection(QObject):
             QTimer.singleShot(2, remaining_task)
 
     # -------------------------------------------------------------------------
-    @dumpArgs
+    # @dumpArgs
     def send_commands(self, commands: list) -> None:
         """Send commands to the REPL via raw mode.
-        :param commands: list of commands
+
+        :param commands: list of commands.
         First will send a raw_on, then the commands, raw_off, followed by a soft reboot.
         :returns: Nothing
         """

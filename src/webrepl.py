@@ -1,4 +1,9 @@
-"""micropython webrepl related functions.
+## @file webrepl.py
+#
+
+"""
+micropython webrepl related functions.
+======================================
 
 Uses 'selenium' for the connection and 'keyboard' to enter the password.
 
@@ -43,9 +48,9 @@ def find_webrepl_html_file() -> str:
 
 
 # -----------------------------------------------------------------------------
-@dumpArgs
+# @dumpArgs
 def start_webrepl_html(ip="") -> bool:
-    """Start webrepl client after modifying it's contents to connect to the given ip
+    """Start webrepl client after modifying it's contents to connect to the given ip.
 
     :param ip: IP address and optional portnumber to connect to
     :returns: True on success, False in case of an error
@@ -88,9 +93,10 @@ def start_webrepl_html(ip="") -> bool:
 
 
 # -------------------------------------------------------------------------
-@dumpArgs
+# @dumpArgs
 def ip_to_url(ip, port="") -> str:
-    """Convert an IP address to a full URL like "ws://192.168.178.149:8266/"
+    """Convert an IP address to a full URL like "ws://192.168.178.149:8266/".
+
     :param ip: ip address with optional port number
     :param port: Optional port number. Could be embedded in the ip address
     :returns: url string.
@@ -111,9 +117,10 @@ def ip_to_url(ip, port="") -> str:
 
 
 # -------------------------------------------------------------------------
-@dumpArgs
+# @dumpArgs
 def start_session(browser, url) -> None:
     """Start the session by entering the url in the webpage.
+
     :param browser: The selenium browser session
     :param url: URL string. Format is like "ws://192.168.178.149:8266/"
     """
@@ -125,9 +132,10 @@ def start_session(browser, url) -> None:
 
 
 # -------------------------------------------------------------------------
-@dumpArgs
+# @dumpArgs
 def wait_for_welcome_message(browser, interval=0.5, max_retries=10) -> bool:
-    """Wait for the welcome message.
+    """Wait for the webrepl welcome message.
+
     :param browser: The selenium browser sessin;
     :param interval: The time in seconds between each attempt to find the password prompt.
     :param max_retries: Maximum number of retries.
@@ -153,10 +161,12 @@ def wait_for_welcome_message(browser, interval=0.5, max_retries=10) -> bool:
 
 
 # -------------------------------------------------------------------------
-@dumpArgs
+# @dumpArgs
 def enter_password(browser, password: str, interval=0.5, max_retries=10) -> bool:
     """Enter the passsword in the session.
+
     This will not be done with selenium, but with 3rd party library 'keyboard'
+
     :param browser: The selenium browser sessin;
     :param password: The password to enter
     :param interval: The time in seconds between each attempt to find the password prompt.
@@ -193,9 +203,10 @@ def enter_password(browser, password: str, interval=0.5, max_retries=10) -> bool
 
 
 # -------------------------------------------------------------------------
-@dumpArgs
+# @dumpArgs
 def wait_for_repl_prompt(browser, max_retries=10) -> bool:
     """Wait for the repl password prompt '>>>'.
+
     :returns: True in case of success, False in case of an error.
     """
 
@@ -223,7 +234,6 @@ def wait_for_repl_prompt(browser, max_retries=10) -> bool:
 
 
 # -------------------------------------------------------------------------
-@dumpArgs
 def start_webrepl_with_selenium(url="", password=""):
     """Start webrepl with selenium.
 
@@ -276,7 +286,7 @@ def start_webrepl_with_selenium(url="", password=""):
 
 # -------------------------------------------------------------------------
 def main(args):
-    """main (test function)"""
+    """main (test function)."""
 
     # url = f"ws://{args.ip}:{args.port}/"       # "ws://192.168.178.149:8266/"
     url = ip_to_url(args.ip, args.port)

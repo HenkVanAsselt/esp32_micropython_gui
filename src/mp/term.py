@@ -157,7 +157,7 @@ if os.name == "nt":  # noqa
 
     class Term(Miniterm):
         def __init__(self, serial_instance, echo=False, eol="crlf", filters=()):
-            debug("Intializing Term()")
+            debug("Intializing class Term(Miniterm)")
             self.console = Console()
             self.serial = serial_instance
             self.echo = echo

@@ -1,4 +1,6 @@
-""" worker.py
+"""
+worker.py
+=========
 
 Goal
 ====
@@ -13,46 +15,48 @@ wait till a thread is finished.
 Usage example
 =============
 
-import param
-from worker import Worker
+.. code-block:: python
 
-class MainWindow(QMainWindow):
+    import param
+    from worker import Worker
 
-    text_update = QtCore.pyqtSignal(str)
+    class MainWindow(QMainWindow):
 
-    def __init__(self):
+        text_update = QtCore.pyqtSignal(str)
 
-        super(MainWindow, self).__init__()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
+        def __init__(self):
 
-        param.worker = Worker()
-        param.worker.outSignal.connect(self.append_text)
+            super(MainWindow, self).__init__()
+            self.ui = Ui_MainWindow()
+            self.ui.setupUi(self)
 
-    def somefunction():
+            param.worker = Worker()
+            param.worker.outSignal.connect(self.append_text)
 
-        param.worker.run_command("ping 127.0.0.1")
-        while param.worker.active:
-            # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
-            loop = QEventLoop()
-            QTimer.singleShot(250, loop.quit)
-            loop.exec_()
-        param.worker.run_command("ping 192.168.178.1")
+        def somefunction():
 
-    @pyqtSlot(str)
-    def append_text(self, text: str) -> None:
+            param.worker.run_command("ping 127.0.0.1")
+            while param.worker.active:
+                # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
+                loop = QEventLoop()
+                QTimer.singleShot(250, loop.quit)
+                loop.exec_()
+            param.worker.run_command("ping 192.168.178.1")
 
-        cur = self.ui.text_output.textCursor()
-        cur.movePosition(QtGui.QTextCursor.End)  # Move cursor to end of text
-        s = str(text)
-        while s:
-            head, sep, s = s.partition("\n")  # Split line at LF
-            head = head.replace("\r", "")     # Remove the Carriage Returns to avoid double linespacing.
-            cur.insertText(head)  # Insert text at cursor
-            if sep:  # New line if LF
-                cur.insertBlock()
-        self.ui.text_output.setTextCursor(cur)  # Update visible cursor
-        self.ui.text_output.update()
+        @pyqtSlot(str)
+        def append_text(self, text: str) -> None:
+
+            cur = self.ui.text_output.textCursor()
+            cur.movePosition(QtGui.QTextCursor.End)  # Move cursor to end of text
+            s = str(text)
+            while s:
+                head, sep, s = s.partition("\\n")  # Split line at LF
+                head = head.replace("\\r", "")     # Remove the Carriage Returns to avoid double linespacing.
+                cur.insertText(head)  # Insert text at cursor
+                if sep:  # New line if LF
+                    cur.insertBlock()
+            self.ui.text_output.setTextCursor(cur)  # Update visible cursor
+            self.ui.text_output.update()
 
 """
 

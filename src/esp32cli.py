@@ -43,6 +43,7 @@ from cmd2 import with_argparser
 import colorama
 import serial
 from PyQt5.Qt import QEventLoop, QTimer
+import keyboard
 
 # Local imports
 import param
@@ -109,7 +110,7 @@ def erase_flash(comport="COM5") -> bool:
 
 # -----------------------------------------------------------------------------
 def write_flash_with_binfile(comport="COM5", binfile=None) -> bool:
-    """Write flash of connected device with given binfile
+    """Write flash of connected device with given binfile.
 
     :param comport: port to use
     :param binfile: file to write
@@ -157,6 +158,7 @@ class ESPShell(cmd2.Cmd):
     CMD_CAT_REPL = "REPL related functions"
 
     def __init__(self, color=False, caching=False, reset=False, port=""):
+        """Initialialize class ESPShell instance."""
 
         startup_script = os.path.join(os.path.dirname(__file__), ".esp32clirc")
         super().__init__(
@@ -186,7 +188,7 @@ class ESPShell(cmd2.Cmd):
         self.port = port  # Name of the COM port
         debug(f"In ESPShell.__init__() {self.port=}")
         self.fe = None
-        self.repl = None
+        self.repl_connection = None
         # self.tokenizer = Tokenizer()
 
         self.__intro()
@@ -220,10 +222,12 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     def __del__(self):
+        """Delete will disconnect."""
         self.__disconnect()
 
     # -------------------------------------------------------------------------
     def __intro(self):
+        """Show the cmd intro."""
 
         if self.color:
             self.intro = (
@@ -246,6 +250,8 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     def __set_prompt_path(self):
+        """Set the shell prompt.
+        """
 
         if self.fe:
             pwd = self.fe.pwd()
@@ -269,6 +275,7 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     def __error(self, msg):
+        """Show the error message."""
 
         if self.color:
             print("\n" + colorama.Fore.LIGHTRED_EX + msg + colorama.Fore.RESET + "\n")
@@ -278,7 +285,8 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @dumpArgs
     def __connect(self, port) -> bool:
-        """Open MpFileExplorer connection over the given port
+        """Open MpFileExplorer connection over the given port.
+
         :param port: port to use
         :returns: True on success, False on error
         """
@@ -310,7 +318,7 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @dumpFuncname
     def __disconnect(self) -> None:
-        """Close current fe (file-exeplorer) connection
+        """Close current fe (file-exeplorer) connection.
         """
 
         debug("Terminating MpFileExplorer")
@@ -326,7 +334,8 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     def __is_open(self) -> bool:
-        """Is MpFileExplorer active?
+        """Test if MpFileExplorer is active.
+
         :returns: True if active, False if not
         """
         if not self.fe:
@@ -342,14 +351,16 @@ class ESPShell(cmd2.Cmd):
         :returns: The result as a bytestring
 
         Examples::
-        * exec blinky.blink()
-        * exec print(uos.listdir())
-        * exec print(uos.getcwd())
-        * exec print(uos.uname())
+
+            exec blinky.blink()
+            exec print(uos.listdir())
+            exec print(uos.getcwd())
+            exec print(uos.uname())
         """
 
         def data_consumer(_data: bytes) -> None:
             """Handle the incoming data.
+
             By default, it just prints it.
             :param _data: Data to process
             """
@@ -378,7 +389,8 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     def get_ip(self) -> str:
-        """Get wlan ip address of connected device
+        """Get wlan ip address of connected device.
+
         :returns: The IP address
         """
         try:
@@ -392,6 +404,14 @@ class ESPShell(cmd2.Cmd):
             return ""
 
     # -------------------------------------------------------------------------
+    def softreset(self) -> None:
+        """Soft reset the device, should be equivalent with CTRL+D in repl.
+        """
+        print("performing a soft reset")
+        self.remote_exec("import machine")
+        self.remote_exec("machine.soft_reset()")
+
+    # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_exit(self, _args):
         """Exit this shell."""
@@ -403,8 +423,9 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
     def do_open(self, statement) -> None:
-        """open <TARGET>
-        Open connection to device with given target. TARGET might be:
+        """Open connection to device with given target.
+
+        TARGET might be:
 
         - a serial port, e.g.       ttyUSB0, ser:/dev/ttyUSB0
         - a telnet host, e.g        tn:192.168.1.1 or tn:192.168.1.1,login,passwd
@@ -450,7 +471,7 @@ class ESPShell(cmd2.Cmd):
     def do_close(self, _args):
         """Close connection to device."""
         self.__disconnect()
-        print("Connection has been closed.")
+        print("File Explorer connection has been closed.")
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
@@ -513,7 +534,8 @@ class ESPShell(cmd2.Cmd):
     @cmd2.with_category(CMD_CAT_FILES)
     @must_be_connected
     def do_cd(self, statement) -> None:
-        """cd <TARGET DIR>
+        """cd <TARGET DIR>.
+
         Change remote directory on the target
         """
 
@@ -548,7 +570,8 @@ class ESPShell(cmd2.Cmd):
     @cmd2.with_category(CMD_CAT_FILES)
     @must_be_connected
     def do_md(self, statement):
-        """md <TARGET DIR> or mkdir <TARGET DIR>
+        """md <TARGET DIR> or mkdir <TARGET DIR>.
+
         Create new remote directory.
         """
 
@@ -811,8 +834,9 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_FILES)
     def do_rm(self, statement):
-        """rm <REMOTE FILE or DIR>
-        Delete a remote file or directory.
+        """rm <REMOTE FILE or DIR>.
+
+        Remove/delete a remote file or directory.
 
         Note: only empty directories can be removed.
         """
@@ -834,7 +858,7 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_FILES)
     def do_mrm(self, statement):
-        """Delete all remote files that match the given fnmatch mask
+        """Delete all remote files that match the given fnmatch mask.
 
         Note: "mrm" does not delete directories, and it is not recursive.
         """
@@ -919,10 +943,11 @@ class ESPShell(cmd2.Cmd):
         """Execute a single Python statement on the remote device.
 
         Examples::
-        * exec blinky.blink()
-        * exec print(uos.listdir())
-        * exec print(uos.getcwd())
-        * exec print(uos.uname())
+
+            exec blinky.blink()
+            exec print(uos.listdir())
+            exec print(uos.getcwd())
+            exec print(uos.uname())
         """
 
         self.remote_exec(statement.args)
@@ -944,11 +969,10 @@ class ESPShell(cmd2.Cmd):
         print(f"execfile returned {ret=}")
         print(ret)
 
-
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
     def do_run(self, statement):
-        """Run the given local file on the connected device"""
+        """Run the given local file on the connected device."""
 
         debug(f"{statement=}")
         filename = statement.arg_list[0]
@@ -966,72 +990,102 @@ class ESPShell(cmd2.Cmd):
         print("run/start is not functional yet")
 
         # @todo: Send the python file contents:
-        # if self.repl and self.connection:
+        # if self.repl_connection and self.connection:
         #     self.connection.send_commands(python_script)
 
     do_start = do_run  # Create an alias
 
     # -------------------------------------------------------------------------
+    repl_parser = argparse.ArgumentParser()
+    repl_parser.add_argument(
+        "-r", "--reboot", action='store_true', help="Soft-reboot the device after the REPL connection is made."
+    )
+
+    @with_argparser(repl_parser)
     @must_be_connected
     @cmd2.with_category(CMD_CAT_REPL)
-    def do_repl(self, _args):
-        """Enter Micropython REPL over serial connection
+    def do_repl(self, statement):
+        """Enter Micropython REPL over serial connection.
         """
 
-        if not self.repl:
+        if statement.reboot:
+            self.start_repl(with_softreboot=True)
+        else:
+            self.start_repl(with_softreboot=False)
+
+    # -------------------------------------------------------------------------
+    def start_repl(self, with_softreboot=False) -> None:
+        """Start the repl connection.
+        """
+
+        debug("=====")
+        debug("start_repl()")
+        if not self.repl_connection:
 
             debug("Importing mp.term Term")
             from mp.term import Term
 
-            self.repl = Term(self.fe.con)
+            self.repl_connection = Term(self.fe.con)
 
             if platform.system() == "Windows":
-                self.repl.exit_character = chr(0x11)
+                self.repl_connection.exit_character = chr(0x11)
             else:
-                self.repl.exit_character = chr(0x1D)
+                self.repl_connection.exit_character = chr(0x1D)
 
-            debug(f"{self.repl.exit_character=}")
+            debug(f"{self.repl_connection.exit_character=}")
 
-            self.repl.raw = True
-            self.repl.set_rx_encoding("UTF-8")
-            self.repl.set_tx_encoding("UTF-8")
+            self.repl_connection.raw = True
+            self.repl_connection.set_rx_encoding("UTF-8")
+            self.repl_connection.set_tx_encoding("UTF-8")
 
         else:
             debug("Reusing self.fe.con")
-            self.repl.serial = self.fe.con
+            self.repl_connection.serial = self.fe.con
 
-        pwd = self.fe.pwd()
-        debug(f"in do_repl, {pwd=}")
+        # Save the current workdirectory of the device.
+        saved_workdir = self.fe.pwd()
+        debug(f"in do_repl, {saved_workdir=}")
 
         debug("Calling fe.teardown()")
         self.fe.teardown()
 
         debug("Calling repl.start()")
-        self.repl.start()
-
-        if self.repl.exit_character == chr(0x11):
+        self.repl_connection.start()
+        if self.repl_connection.exit_character == chr(0x11):
             print("\n*** Exit REPL with Ctrl+Q ***")
         else:
             print("\n*** Exit REPL with Ctrl+] ***")
 
+        # If required, perform a soft reboot of the connected device by sending CTRL+D
+        if with_softreboot:
+            # keyboard.write('\x04')
+            keyboard.press_and_release('ctrl+d')
+
         try:
             debug("calling repl.join(True)")
-            self.repl.join(True)
+            self.repl_connection.join(True)
         except Exception as err:
             debug(f"Exception: {err}")
             pass
 
+
+
+        debug("-----")
         debug("Calling repl.console.cleanup()")
-        self.repl.console.cleanup()
+        self.repl_connection.console.cleanup()
 
         if self.caching:
+            debug("Clearing the fe cache.")
             # Clear the file explorer cache so we can see any new files.
             self.fe.cache = {}
 
         debug("Calling self.fe.setup()")
         self.fe.setup()
+
+        # Change back to the previous saved workfolder on the device
         try:
-            self.fe.cd(pwd)
+            debug(f"Trying to restore previous {saved_workdir=}")
+            self.fe.cd(saved_workdir)
         except RemoteIOError as e:
             # Working directory does not exist anymore
             self.__error(str(e))
@@ -1042,7 +1096,7 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_RUN)
     def do_mpyc(self, statement):
-        """mpyc <LOCAL PYTHON FILE>
+        """mpyc <LOCAL PYTHON FILE>.
         Compile a Python file into byte-code by using mpy-cross (which needs to be in the path).
         The compiled file has the same name as the original file but with extension '.mpy'.
         """
@@ -1079,7 +1133,7 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_putc(self, statement):
-        """mputc <LOCAL PYTHON FILE> [<REMOTE FILE>]
+        """mputc <LOCAL PYTHON FILE> [<REMOTE FILE>].
         Compile a Python file into byte-code by using mpy-cross (which needs to be in the
         path) and upload it. The compiled file has the same name as the original file but
         with extension '.mpy' by default.
@@ -1232,13 +1286,20 @@ class ESPShell(cmd2.Cmd):
             os.system("cls")
 
     # -------------------------------------------------------------------------
+    sync_parser = argparse.ArgumentParser()
+    sync_parser.add_argument(
+        "-s", "--start", action='store_true', help="Start REPL and softreboot the device after all files are synced."
+    )
+
+    @with_argparser(sync_parser)
+    @must_be_connected
     @cmd2.with_category(CMD_CAT_FILES)
     def do_sync(self, statement):
         """Copy all python files (Sync) from the source folder to the connected device.
 
         Examples:
             * sync
-            * sync c:/temp/upython_files
+            * sync --start
 
         If no foldername is given, then implicitly the internal source folder will be used.
         Does not support subfolders (yet).
@@ -1247,10 +1308,7 @@ class ESPShell(cmd2.Cmd):
 
         debug(f"do_sync {statement=}")
 
-        if len(statement.arg_list) == 1:
-            sourcefolder = pathlib.Path(statement.arg_list[0])
-        else:
-            sourcefolder = esp32common.get_sourcefolder()
+        sourcefolder = esp32common.get_sourcefolder()
 
         if not sourcefolder.is_dir():
             print(f"Could not find folder {sourcefolder}")
@@ -1267,8 +1325,16 @@ class ESPShell(cmd2.Cmd):
             else:
                 print(f"cannot sync subolder {filename} (yet)")
 
+        if statement.start:
+            if param.is_gui:
+                param.gui_mainwindow.change_to_repl_mode(None)
+                keyboard.press_and_release("ctrl+d")
+            else:
+                self.start_repl(with_softreboot=True)
+
     # -------------------------------------------------------------------------
     flash_parser = argparse.ArgumentParser()
+
     flash_parser.add_argument(
         "binfile",
         nargs="?",
@@ -1352,11 +1418,12 @@ class ESPShell(cmd2.Cmd):
     @cmd2.with_category(CMD_CAT_WLAN)
     @cmd2.with_category(CMD_CAT_REPL)
     def do_webrepl(self, statement) -> None:
-        """Start webrepl client
+        """Start webrepl client.
 
-        The IP address and portnumber can be given like
-        '192.168.178.149'   (which will use the default port 8266)
-        '192.168.178.149:1111' (which will use portnumber 1111)
+        The IP address and portnumber can be given like::
+
+            '192.168.178.149'   (which will use the default port 8266)
+            '192.168.178.149:1111' (which will use portnumber 1111)
         """
 
         if statement.arg_list:
@@ -1388,18 +1455,17 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_REBOOT)
     def do_softreset(self, _statement) -> None:
-        """Soft reset the device, equivalent with CTRL+D in repl.
+        """Soft reset the device, should be equivalent with CTRL+D in repl.
         """
 
-        self.remote_exec("import machine")
-        self.remote_exec("machine.soft_reset()")
+        self.softreset()
         # No __disconnect is neccessary here.
 
     # -------------------------------------------------------------------------
     @must_be_connected
     @cmd2.with_category(CMD_CAT_REBOOT)
     def do_hardreset(self, _statement) -> None:
-        """Soft reset the device, equivalent with pressing the external RESET button.
+        """Hard reset the device, equivalent with pressing the external RESET button.
         """
 
         self.remote_exec("import machine")

@@ -40,7 +40,7 @@ rem --- Run pylint
 
 rem --- Run flake8 
 :flake8
-    flake8 --exclude=lib,tests,*_qt_design*,doc --max-line-length=140 --ignore=
+    flake8 --exclude=bin,upython_sources,lib,tests,*_qt_design*,doc --max-line-length=140 --ignore=
     goto _eof
 
 rem --- Run vulture to detect unused functions and/or variables

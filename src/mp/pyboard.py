@@ -19,6 +19,7 @@ except AttributeError:
 
 def stdout_write_bytes(b: bytes) -> None:
     """Write the given bytestring to stdout.
+
     :param b: bytestring to write
     """
     b = b.replace(b"\x04", b"")
@@ -27,16 +28,17 @@ def stdout_write_bytes(b: bytes) -> None:
 
 
 class PyboardError(BaseException):
-    """Does nothing.
-    """
-    ...     # Could also have written 'pass' here.
+    """Does nothing.    """
+
+    ...  # Could also have written 'pass' here.
 
 
 class Pyboard:
+    """Class Pyboard."""
 
-    """Class Pyboard"""
     def __init__(self, conbase):
-        """Intialize class Pyboard
+        """Intialize class Pyboard.
+
         :param conbase:
         """
         debug(f"Pyboard __init__ {conbase=}")
@@ -51,8 +53,15 @@ class Pyboard:
             self.con.close()
 
     # @dumpArgs
-    def read_until(self, min_num_bytes: int, ending: bytes, timeout: float = 10.0, data_consumer=None):
-        """Read from the port until one of the conditions it met.
+    def read_until(
+            self,
+            min_num_bytes: int,
+            ending: bytes,
+            timeout: float = 10.0,
+            data_consumer=None,
+    ):
+        """Read from the port until one of the conditions is met.
+
         :param min_num_bytes: minimum number of bytes to read
         :param ending: end of the datastream to test on
         :param timeout: timeout
@@ -79,13 +88,12 @@ class Pyboard:
                 if timeout is not None and timeout_count >= 100 * timeout:
                     break
                 time.sleep(0.01)
-        debug(f"read_until returns \"{data}\"")
+        debug(f'read_until returns "{data}"')
         return data
 
     @dumpFuncname
     def enter_raw_repl(self):
-        """Pyboard enter raw repl.
-        """
+        """Pyboard enter raw repl."""
 
         time.sleep(0.5)  # allow some time for board to reset
         debug(r'self.con.write "\r\x03\x03"  (Ctrl-C twice)')
@@ -132,13 +140,13 @@ class Pyboard:
 
     @dumpFuncname
     def exit_raw_repl(self):
-        """Pyboard exit raw repl.
-        """
+        """Pyboard exit raw repl."""
         debug(r'self.con.write "\r\x02"  (ctrl-B: enter friendly REPL)')
         self.con.write(b"\r\x02")  # ctrl-B: enter friendly REPL
 
     def follow(self, timeout, data_consumer=None) -> tuple:
         """Wait for normal ouput.
+
         :param timeout: timeout
         :param data_consumer: callback function
         :returns: tuple of data and error output
@@ -159,7 +167,8 @@ class Pyboard:
         return data, data_err
 
     def exec_raw_no_follow(self, command) -> None:
-        """Pyboard execute raw command, no follow
+        """Pyboard execute raw command, no follow.
+
         :param command: command to execute
         :returns: Nothing
         """
@@ -194,7 +203,7 @@ class Pyboard:
             self.use_raw_paste = False
 
         # write string
-        debug(f"self.con.write \"{command_bytes}\"")
+        debug(f'self.con.write "{command_bytes}"')
         self.con.write(command_bytes)
 
         # Alternative for write string above, do it in chuncks of max 256 bytes.
@@ -212,18 +221,20 @@ class Pyboard:
         if data != b"OK":
             raise PyboardError("could not exec command (response: %r)" % data)
 
-    def exec_raw(self, command, timeout=10, data_consumer=None):
+    def exec_raw(self, command, timeout=10, data_consumer=None) -> tuple:
         """Execute the given command.
+
         :param command: command to execute
         :param timeout: maximum allowed time.
         :param data_consumer: callback function.
-        :returns:
+        :returns: tuple of data and error output
         """
         self.exec_raw_no_follow(command)
         return self.follow(timeout, data_consumer)
 
     def eval(self, expression: str) -> str:
         """Evaluate and run the expression on the connected device and print the result.
+
         :param expression: the expression to evaluate
         :returns: The result of the code which ran on the connected device.
         """
@@ -232,7 +243,8 @@ class Pyboard:
         return ret
 
     def exec_(self, command, data_consumer=None) -> str:
-        """Execture the given command
+        """Execute the given command.
+
         :param command: command to execute
         :param data_consumer:
         :returns: The output
@@ -243,7 +255,8 @@ class Pyboard:
         return ret
 
     def execfile(self, filename) -> str:
-        """Open a local python file and execute the contents
+        """Open a local python file and execute the contents.
+
         :param filename: the file to open end execute
         :returns: the output
         """
@@ -253,6 +266,7 @@ class Pyboard:
 
     def raw_paste_write(self, command_bytes: bytes) -> None:
         """Write the given commands using the raw-paste method.
+
         :param command_bytes: The command to execute
         :returns: Nothing
         """
@@ -275,9 +289,11 @@ class Pyboard:
                     return
                 else:
                     # Unexpected data from device.
-                    raise PyboardError("unexpected read during raw paste: {}".format(data))
+                    raise PyboardError(
+                        "unexpected read during raw paste: {}".format(data)
+                    )
             # Send out as much data as possible that fits within the allowed window.
-            b = command_bytes[i:min(i + window_remain, len(command_bytes))]
+            b = command_bytes[i: min(i + window_remain, len(command_bytes))]
             self.con.write(b)
             window_remain -= len(b)
             i += len(b)
@@ -291,7 +307,8 @@ class Pyboard:
             raise PyboardError("could not complete raw paste: {}".format(data))
 
     def get_time(self) -> int:
-        """Get the time of the connected board
+        """Get the time of the connected board.
+
         :returns: integer with the time
         """
         t = str(self.eval("pyb.RTC().datetime()").encode("utf-8"))[1:-1].split(", ")
@@ -299,30 +316,32 @@ class Pyboard:
 
     def fs_ls(self, src):
         """ls function, to be run on the connected device.
+
         :param src: The source folder
         :returns: Nothing
         """
         cmd = (
-            "import uos\nfor f in uos.ilistdir(%s):\n"
-            " print('{:12} {}{}'.format(f[3]if len(f)>3 else 0,f[0],'/'if f[1]&0x4000 else ''))"
-            % (("'%s'" % src) if src else "")
+                "import uos\nfor f in uos.ilistdir(%s):\n"
+                " print('{:12} {}{}'.format(f[3]if len(f)>3 else 0,f[0],'/'if f[1]&0x4000 else ''))"
+                % (("'%s'" % src) if src else "")
         )
         self.exec_(cmd, data_consumer=stdout_write_bytes)
 
     def fs_cat(self, src: str, chunk_size: int = 256) -> None:
         """Show the contents of the file on the connected device.
+
         :param src: The file to cat.
         :param chunk_size: Show per xxx bytes
         :returns: Nothing
         """
         cmd = (
-            "with open('%s') as f:\n while 1:\n"
-            "  b=f.read(%u)\n  if not b:break\n  print(b,end='')" % (src, chunk_size)
+                "with open('%s') as f:\n while 1:\n"
+                "  b=f.read(%u)\n  if not b:break\n  print(b,end='')" % (src, chunk_size)
         )
         self.exec_(cmd, data_consumer=stdout_write_bytes)
 
     def fs_get(self, src, dest, chunk_size=256):
-        """Get a file
+        """Get a file.
 
         :param src:
         :param dest:
@@ -335,21 +354,25 @@ class Pyboard:
         with open(dest, "wb") as f:
             while True:
                 data = bytearray()
-                self.exec_("print(r(%u))" % chunk_size, data_consumer=lambda d: data.extend(d))
+                self.exec_(
+                    "print(r(%u))" % chunk_size, data_consumer=lambda d: data.extend(d)
+                )
                 assert data.endswith(b"\r\n\x04")
                 try:
                     data = ast.literal_eval(str(data[:-3], "ascii"))
                     if not isinstance(data, bytes):
                         raise ValueError("Not bytes")
                 except (UnicodeError, ValueError) as e:
-                    raise PyboardError("fs_get: Could not interpret received data: %s" % str(e))
+                    raise PyboardError(
+                        "fs_get: Could not interpret received data: %s" % str(e)
+                    )
                 if not data:
                     break
                 f.write(data)
         self.exec_("f.close()")
 
     def fs_put(self, src, dest, chunk_size=256):
-        """"Put a file.
+        """Put a file.
 
         :param src:
         :param dest:
@@ -369,18 +392,21 @@ class Pyboard:
         self.exec_("f.close()")
 
     def fs_mkdir(self, dirname: str) -> None:
-        """Make the given folder on the device
+        """Make the given folder on the device.
+
         :param dirname: Name of the folder to create"""
         self.exec_("import uos\nuos.mkdir('%s')" % dirname)
 
     def fs_rmdir(self, dirname: str) -> None:
         """Remove directory.
+
         :param dirname: Directory to remove
         """
         self.exec_("import uos\nuos.rmdir('%s')" % dirname)
 
     def fs_rm(self, src: str) -> None:
-        """Remove file
+        """Remove file.
+
         :param src: File to remove
         """
         self.exec_("import uos\nuos.remove('%s')" % src)

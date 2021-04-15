@@ -168,33 +168,47 @@ class MpFileExplorer(Pyboard):
 
     # -------------------------------------------------------------------------
     def _fqn(self, name):
+        """Determine fully qualified name for given name.
+
+        :param name:
+        :returns: FQN, consisting for current dir and the given folder name.
+        """
         return posixpath.join(self.dir, name)
 
     # -------------------------------------------------------------------------
     def __set_sysname(self):
+        """Get and set the device system name.
+        """
         code_to_run_on_device = "uos.uname()[0]"
         debug(f"in pyboard __set_sysname(), {code_to_run_on_device=}")
-        self.sysname = self.eval(code_to_run_on_device)
+        self.sysname = self.eval(code_to_run_on_device).decode("utf-8")
         # self.sysname = self.eval("uos.uname()[0]").decode("utf-8")
         debug(f"{self.sysname=}")
 
     # -------------------------------------------------------------------------
     @dumpArgs
     def close(self):
-
+        """Close this class."""
         Pyboard.close(self)
         self.dir = None
 
     # -------------------------------------------------------------------------
     @dumpFuncname
     def teardown(self):
-
+        """Teardown this class."""
         self.exit_raw_repl()
         self.sysname = None
 
     # -------------------------------------------------------------------------
     @dumpFuncname
     def setup(self):
+        """Setup of MpFileExplorer.
+
+        Will do the following::
+        * Enter raw repl
+        * Get the current working directory
+        * Get and set the current system name
+        """
 
         self.enter_raw_repl()
         self.exec_(
@@ -214,6 +228,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def ls(self, add_files=True, add_dirs=True, add_details=False):
+        """List files."""
 
         files = []
 
@@ -251,6 +266,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def rm(self, target):
+        """Remove a file."""
 
         debug(f"mpfexp.rm() {target=}")
 
@@ -279,6 +295,7 @@ class MpFileExplorer(Pyboard):
 
     # -------------------------------------------------------------------------
     def mrm(self, pat, verbose=False):
+        "Multi Remove File."
 
         files = self.ls(add_dirs=False)
         debug(f"in mrm, {files=}")
@@ -292,6 +309,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def put(self, src, dst=None) -> None:
+        """Put a file."""
 
         debug(f"mpfexp.put {src=} {dst=}")
 
@@ -350,6 +368,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def get(self, src, dst=None):
+        """Get a file."""
 
         if src not in self.ls():
             raise RemoteIOError("No such file or directory: '%s'" % self._fqn(src))
@@ -407,6 +426,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def gets(self, src):
+        """Gets."""
 
         try:
 
@@ -445,6 +465,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def puts(self, dst, lines):
+        """Puts."""
 
         try:
 
@@ -473,6 +494,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def cd(self, target):
+        """Change Directory."""
 
         if target.startswith("/"):
             tmp_dir = target
@@ -500,6 +522,7 @@ class MpFileExplorer(Pyboard):
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def md(self, target):
+        """Make directory."""
 
         try:
             code_to_run_on_device = "uos.mkdir('%s')" % self._fqn(target)
@@ -517,6 +540,7 @@ class MpFileExplorer(Pyboard):
 
     # -------------------------------------------------------------------------
     def mpy_cross(self, src, dst=None):
+        """Mpy cross compilation."""
 
         debug(f"mpy_cross() {src=} {dst=}")
 
@@ -532,19 +556,23 @@ class MpFileExplorer(Pyboard):
 
 # =============================================================================
 class MpFileExplorerCaching(MpFileExplorer):
-    def __init__(self, constr, reset=False):
-        MpFileExplorer.__init__(self, constr, reset)
 
+    def __init__(self, constr, reset=False):
+        """Initialize MpFileExplorererCaching.
+        """
+        MpFileExplorer.__init__(self, constr, reset)
         self.cache = {}
 
     # -------------------------------------------------------------------------
     def __cache(self, path, data):
+        """Cache the data in the given path."""
 
         logging.debug("caching '%s': %s" % (path, data))
         self.cache[path] = data
 
     # -------------------------------------------------------------------------
     def __cache_hit(self, path):
+        """Return the result if the path was cached."""
 
         if path in self.cache:
             logging.debug("cache hit for '%s': %s" % (path, self.cache[path]))
@@ -554,6 +582,7 @@ class MpFileExplorerCaching(MpFileExplorer):
 
     # -------------------------------------------------------------------------
     def ls(self, add_files=True, add_dirs=True, add_details=False):
+        """Chached ls."""
 
         hit = self.__cache_hit(self.dir)
 
@@ -573,6 +602,7 @@ class MpFileExplorerCaching(MpFileExplorer):
 
     # -------------------------------------------------------------------------
     def put(self, src, dst=None):
+        """Cached put."""
 
         MpFileExplorer.put(self, src, dst)
 
@@ -591,6 +621,7 @@ class MpFileExplorerCaching(MpFileExplorer):
 
     # -------------------------------------------------------------------------
     def puts(self, dst, lines):
+        """Cached puts."""
 
         MpFileExplorer.puts(self, dst, lines)
 
@@ -606,6 +637,7 @@ class MpFileExplorerCaching(MpFileExplorer):
 
     # -------------------------------------------------------------------------
     def md(self, dir):
+        """Chached md."""
 
         MpFileExplorer.md(self, dir)
 
@@ -621,6 +653,7 @@ class MpFileExplorerCaching(MpFileExplorer):
 
     # -------------------------------------------------------------------------
     def rm(self, target):
+        """Cached rm."""
 
         MpFileExplorer.rm(self, target)
 

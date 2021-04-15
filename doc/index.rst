@@ -10,11 +10,12 @@ ESP32 MicroPython GUI
    :maxdepth: 3
    :caption: Contents:
 
+   esp32common
    esp32cli
    esp32gui
-   esp32common
-   serialterminalwidget
 
+   repl
+   
 
 .. toctree::
    :maxdepth: 3
