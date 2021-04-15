@@ -361,6 +361,7 @@ class MainWindow(QMainWindow):
             return self.mode
 
         # Close the serial connection for the commandline mode
+        # This will execute do_close()
         self.cmdlineapp.onecmd_plus_hooks("close")
 
         self.mode = Mode.REPL
