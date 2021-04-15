@@ -204,9 +204,12 @@ class MainWindow(QMainWindow):
         :param text: Text to display
         :return: Nothing
         """
+
+        debug(f"write({text=}). Calling self.text_update.emit({text=})")
         self.text_update.emit(
             text
         )  # noqa # Send signal to synchronise call with main thread # noqa
+
 
     # -------------------------------------------------------------------------
     @pyqtSlot(str)
@@ -217,7 +220,7 @@ class MainWindow(QMainWindow):
         :return: Nothing
         """
 
-        # debug(f"Append text \"{text=}\"")
+        debug(f"Append text \"{text=}\"")
         cur = self.ui.text_output.textCursor()
         cur.movePosition(QtGui.QTextCursor.End)  # Move cursor to end of text
         s = str(text)
@@ -231,6 +234,7 @@ class MainWindow(QMainWindow):
                 cur.insertBlock()
         self.ui.text_output.setTextCursor(cur)  # Update visible cursor
         self.ui.text_output.update()
+        QApplication.processEvents()
 
     @staticmethod
     def flush() -> None:

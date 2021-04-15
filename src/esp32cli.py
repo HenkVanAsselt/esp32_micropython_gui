@@ -461,10 +461,7 @@ class ESPShell(cmd2.Cmd):
         ret = self.__connect(portstr)
         debug(f"{ret=}")
 
-    # @staticmethod
-    # def complete_open(*args):
-    #     ports = glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")
-    #     return [i[5:] for i in ports if i[5:].startswith(args[0])]
+    do_connect = do_open  # Create an alias
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
@@ -1299,7 +1296,7 @@ class ESPShell(cmd2.Cmd):
 
         Examples:
             * sync
-            * sync --start
+            * sync -s or sync --start
 
         If no foldername is given, then implicitly the internal source folder will be used.
         Does not support subfolders (yet).
@@ -1317,6 +1314,7 @@ class ESPShell(cmd2.Cmd):
         print(f'Syncing all files from sourcefolder "{sourcefolder}" to device')
         for filename in sourcefolder.glob("*"):
             print(f" *  {filename}")
+            # self.stdout.flush()
             if filename.is_file():
                 try:
                     self.fe.put(filename, filename.name)
@@ -1324,10 +1322,14 @@ class ESPShell(cmd2.Cmd):
                     self.__error(str(e))
             else:
                 print(f"cannot sync subolder {filename} (yet)")
+        print()
 
         if statement.start:
+            # All files are synced. Go to REPL mode and restart the device.
             if param.is_gui:
+                # First change to repl mode.
                 param.gui_mainwindow.change_to_repl_mode(None)
+                # Then send a CTRL+D to softreset the device
                 keyboard.press_and_release("ctrl+d")
             else:
                 self.start_repl(with_softreboot=True)
@@ -1449,7 +1451,7 @@ class ESPShell(cmd2.Cmd):
         """
 
         ip = self.get_ip()
-        print(ip)
+        print(f"WLAN IP address: {ip}")
 
     # -------------------------------------------------------------------------
     @must_be_connected
