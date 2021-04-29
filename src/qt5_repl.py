@@ -15,7 +15,7 @@ from PyQt5.QtCore import QObject, pyqtSignal, QIODevice, QTimer
 from PyQt5.QtSerialPort import QSerialPort
 
 # Local imports
-from lib.helper import debug, clear_debug_window, dumpFuncname, dumpArgs
+from lib.helper import debug, clear_debug_window, dumpFuncname
 
 ENTER_RAW_MODE = b"\x01"  # CTRL-A
 EXIT_RAW_MODE = b"\x02"  # CTRL-B
@@ -81,7 +81,7 @@ class REPLConnection(QObject):
         if self.serial:
             # perhaps return self.serial.baudRate()
             return self._baudrate
-        #else:
+        # else:
         return None
 
     # -------------------------------------------------------------------------

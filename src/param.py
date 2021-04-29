@@ -1,11 +1,6 @@
 """Parameters file"""
 
 import configparser
-import enum
-
-# COMPORT = ""
-# COMPORT_DESC = ""
-
 
 config = configparser.ConfigParser()
 config.read('esp32cli.ini')
@@ -21,5 +16,3 @@ if __name__ == "__main__":
 
     config = esp32common.readconfig('esp32cli.ini')
     print(config.sections())
-
-

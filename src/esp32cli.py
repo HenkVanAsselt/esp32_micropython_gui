@@ -1065,8 +1065,6 @@ class ESPShell(cmd2.Cmd):
             debug(f"Exception: {err}")
             pass
 
-
-
         debug("-----")
         debug("Calling repl.console.cleanup()")
         self.repl_connection.console.cleanup()
@@ -1433,7 +1431,7 @@ class ESPShell(cmd2.Cmd):
             if len(statement.arg_list) > 1:
                 password = statement.arg_list[1]
             else:
-                password = "daan3006"
+                password = "abc123"
             # self.__disconnect() # Close the current connection over USB. @todo: figure out if this is neccessary.
             # webrepl.start_webrepl_html(ip)    # Open webrepl link over network/wifi
             url = webrepl.ip_to_url(ip)
@@ -1484,9 +1482,9 @@ def main():
     parser.add_argument(
         "-c",
         "--command",
-        help="execute given commands (separated by ;)",
+        help='execute given commands (between "" and separeted by ;)',
         default=None,
-        nargs="*",
+        # nargs="*",
     )
     parser.add_argument(
         "-s", "--script", help="execute commands from file", default=None
@@ -1544,7 +1542,7 @@ def main():
     else:
         logging.basicConfig(format=logformat, level=logging.CRITICAL)
 
-    logging.info("Micropython File Shell v%s started" % version.FULL)
+    logging.info("Micropython HvA Shell")
     logging.info(
         "Running on Python %d.%d using PySerial %s"
         % (sys.version_info[0], sys.version_info[1], serial.VERSION)
@@ -1563,30 +1561,32 @@ def main():
                     args.board
                 )
             )
-    if args.board is not None:
-        debug("if args.board is not None")
-        mpfs.do_open(args.board)
 
-    if not args.board:
-        debug("if not args.board")
+    if args.board:
+        debug(f"{args.board=}")
+        mpfs.do_open(args.board)
+    else:
+        debug("No args.board given. Trying to automatically connect over serial port")
         # Try to find a suitable port and open it
         port, _description = esp32common.get_active_comport()
         print(f"Automatic trying to use {port=}")
         mpfs.do_open(port)
 
     if args.command is not None:
-        debug("args.command is not None")
-        for acmd in " ".join(args.command).split(";"):
-            debug(f"{acmd=}")
-            scmd = acmd.strip()
-            if len(scmd) > 0 and not scmd.startswith("#"):
-                mpfs.onecmd(scmd)
+        debug("Script commands are given")
+        debug(f"{args.command=}")
+        cmd_list = args.command.split(";")
+        for cmd in cmd_list:
+            debug(f"{cmd=}")
+            cmd = cmd.strip()
+            if len(cmd) > 0 and not cmd.startswith("#"):
+                mpfs.onecmd(cmd)
                 # alternatively:
                 # mpfs.onecmd_plus_hooks("{} {}".format(args.command, " ".join(args.command_args)))
                 # sys.exit(0)
 
-    elif args.script is not None:
-        debug("elif args.script is not None")
+    if args.script:
+        debug(f"{args.script=}")
 
         if platform.system() == "Windows":
             mpfs.use_rawinput = True
@@ -1610,12 +1610,14 @@ def main():
         mpfs.prompt = ""
 
     if not args.noninteractive:
-        debug("if not args.interactive")
+        debug("Entering interactive mode.")
         try:
-            debug("Entering cmdloop")
             mpfs.cmdloop()
         except KeyboardInterrupt:
             print("keyboard interrupt")
+    else:
+        debug("Do not enter interactive loop and exit here")
+        sys.exit(0)
 
 
 # =============================================================================

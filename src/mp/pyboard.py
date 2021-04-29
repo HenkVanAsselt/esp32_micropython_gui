@@ -229,6 +229,8 @@ class Pyboard:
         :param data_consumer: callback function.
         :returns: tuple of data and error output
         """
+
+        debug(f"pyboard exec_raw({command=}, {timeout=}, {data_consumer=}")
         self.exec_raw_no_follow(command)
         return self.follow(timeout, data_consumer)
 
@@ -249,6 +251,8 @@ class Pyboard:
         :param data_consumer:
         :returns: The output
         """
+
+        debug(f"pyboard exec_({command},{data_consumer=})")
         ret, ret_err = self.exec_raw(command, data_consumer=data_consumer)
         if ret_err:
             raise PyboardError("exception", ret, ret_err)
@@ -260,6 +264,8 @@ class Pyboard:
         :param filename: the file to open end execute
         :returns: the output
         """
+
+        debug(f"pyboard execfile({filename})")
         with open(filename, "rb") as f:
             pyfile = f.read()
         return self.exec_(pyfile)
@@ -271,6 +277,9 @@ class Pyboard:
         :returns: Nothing
         """
         # Read initial header, with window size.
+
+        debug(f"pyboard raw_paste_write({command_bytes})")
+
         data = self.con.read(2)
         window_size = data[0] | data[1] << 8
         window_remain = window_size

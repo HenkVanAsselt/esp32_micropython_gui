@@ -210,7 +210,6 @@ class MainWindow(QMainWindow):
             text
         )  # noqa # Send signal to synchronise call with main thread # noqa
 
-
     # -------------------------------------------------------------------------
     @pyqtSlot(str)
     def append_text(self, text: str) -> None:

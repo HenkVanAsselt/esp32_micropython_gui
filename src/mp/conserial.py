@@ -34,11 +34,11 @@ from mp.conbase import ConError
 
 
 class ConSerial(ConBase):
-    """
+    """Serial Connection Class
     """
 
-    def __init__(self, port, baudrate=115200, reset=False):
-        """Initialize this class.
+    def __init__(self, port, baudrate=115200, reset=False) -> None:
+        """Initialize ConSerial instance.
         """
         ConBase.__init__(self)
 
@@ -69,22 +69,22 @@ class ConSerial(ConBase):
         """Close serial connection."""
         return self.serial.close()
 
-    def read(self, size):
+    def read(self, size) -> bytes:
         """Read 'size' bytes from the serial port."""
         data = self.serial.read(size)
         logging.debug("conserial read < %s" % str(data))
         return data
 
-    def write(self, data):
+    def write(self, data) -> int:
         """Write 'data' to the serial port."""
         logging.debug("conserial write > %s" % str(data))
         return self.serial.write(data)
 
-    def inWaiting(self):
+    def inWaiting(self) -> int:
         """Are characters waiting on the serial port"""
         return self.serial.inWaiting()
 
-    def survives_soft_reset(self):
+    def survives_soft_reset(self) -> bool:
         """No, a serial port does not survive a soft reset.
         :returns: False
         """
