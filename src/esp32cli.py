@@ -34,7 +34,7 @@ import sys
 import tempfile
 import pathlib
 import functools
-
+import time
 
 # 3rd party imports
 import cmd2  # type: ignore
@@ -91,6 +91,7 @@ def erase_flash(comport="COM5") -> bool:
 
     print(f"Trying to erase flash over {comport=}")
     cmdstr = f'"{esptool}" --chip esp32 --port {comport}: erase_flash'
+    print(f"Running {cmdstr}")
     if param.is_gui:
         try:
             param.worker.run_command(cmdstr)
@@ -157,7 +158,7 @@ class ESPShell(cmd2.Cmd):
     CMD_CAT_RUN = "Execution commands"
     CMD_CAT_REPL = "REPL related functions"
 
-    def __init__(self, color=False, caching=False, reset=False, port=""):
+    def __init__(self, color=False, caching=False, reset=False, autoconnect=True, port=""):
         """Initialialize class ESPShell instance."""
 
         startup_script = os.path.join(os.path.dirname(__file__), ".esp32clirc")
@@ -184,6 +185,8 @@ class ESPShell(cmd2.Cmd):
         self.color = color
         self.caching = caching
         self.reset = reset
+
+        debug(f"In ESPShell.__init__() {autoconnect=}")
 
         self.port = port  # Name of the COM port
         debug(f"In ESPShell.__init__() {self.port=}")
@@ -216,7 +219,7 @@ class ESPShell(cmd2.Cmd):
             )
         )
 
-        if self.port:
+        if self.port and autoconnect:
             debug(f"Automatic trying to use {port=}")
             self.__connect(f"ser:{self.port}")
 
@@ -997,6 +1000,9 @@ class ESPShell(cmd2.Cmd):
     repl_parser.add_argument(
         "-r", "--reboot", action='store_true', help="Soft-reboot the device after the REPL connection is made."
     )
+    repl_parser.add_argument(
+        "-c", "--ctrlc", action='store_true', help="First soft reboot, and then interrupt the boot process."
+    )
 
     @with_argparser(repl_parser)
     @must_be_connected
@@ -1005,13 +1011,11 @@ class ESPShell(cmd2.Cmd):
         """Enter Micropython REPL over serial connection.
         """
 
-        if statement.reboot:
-            self.start_repl(with_softreboot=True)
-        else:
-            self.start_repl(with_softreboot=False)
+        debug(f"{statement=}")
+        self.start_repl(with_softreboot=statement.reboot, with_ctrlc=statement.ctrlc)
 
     # -------------------------------------------------------------------------
-    def start_repl(self, with_softreboot=False) -> None:
+    def start_repl(self, with_softreboot=False, with_ctrlc=False) -> None:
         """Start the repl connection.
         """
 
@@ -1057,6 +1061,18 @@ class ESPShell(cmd2.Cmd):
         if with_softreboot:
             # keyboard.write('\x04')
             keyboard.press_and_release('ctrl+d')
+            time.sleep(0.1)
+            keyboard.press_and_release('ctrl+d')
+            time.sleep(0.1)
+
+        # If required, interrupt the running program with CTRL+C
+        if with_ctrlc:
+            keyboard.press_and_release('ctrl+d')    # First soft reboot
+            time.sleep(0.1)
+            keyboard.press_and_release('ctrl+c')    # Then interrupt the boot process
+            time.sleep(0.1)
+            keyboard.press_and_release('ctrl+c')    # Twice
+            time.sleep(0.1)
 
         try:
             debug("calling repl.join(True)")
@@ -1320,9 +1336,10 @@ class ESPShell(cmd2.Cmd):
                     self.__error(str(e))
             else:
                 print(f"cannot sync subolder {filename} (yet)")
-        print()
+        print("\nSync completed")
 
         if statement.start:
+            print("Restarting device.")
             # All files are synced. Go to REPL mode and restart the device.
             if param.is_gui:
                 # First change to repl mode.
@@ -1343,7 +1360,7 @@ class ESPShell(cmd2.Cmd):
     )
 
     @with_argparser(flash_parser)
-    @must_be_connected
+    # @must_be_connected
     @cmd2.with_category(CMD_CAT_FILES)
     def do_flash(self, statement):
         """flash the connected device with the given binfile.
@@ -1393,15 +1410,21 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_eraseflash(self, _statement) -> None:
-        """Erase the flash memory of the connected device.
+        """Erase the flash memory of the connected device. This will also remove MicroPython itself !!!
         """
 
+        # Step 1 of 3: Close the current com port
+        self.__disconnect()
+        # Step 2 of 3: Erase the flash memory
         erase_flash(comport=self.port)
+        # Step 3 of 3: Open the com port again
+        print(f"--- Connecting again to {self.port=}")
+        self.do_open(self.port)
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_REPL)
     def do_putty(self, _statement) -> None:
-        """Erase the flash memory of the connected device.
+        """Start putty to connect to the device in REPL mode.
         """
 
         import time
@@ -1489,6 +1512,7 @@ def main():
     parser.add_argument(
         "-s", "--script", help="execute commands from file", default=None
     )
+
     parser.add_argument(
         "-n",
         "--noninteractive",
@@ -1504,6 +1528,17 @@ def main():
         "--nocache", help="disable cache", action="store_true", default=False
     )
 
+    parser.add_argument(
+        "-p",
+        "--port",
+        help="COM port",
+        default="",
+    )
+
+    parser.add_argument(
+        "--noautoconnect", help="Do not autoconnect to any COM port", action="store_true", default=False
+    )
+
     parser.add_argument("--logfile", help="write log to file", default=None)
     parser.add_argument(
         "--loglevel",
@@ -1516,18 +1551,6 @@ def main():
         help="hard reset device via DTR (serial connection only)",
         action="store_true",
         default=False,
-    )
-
-    parser.add_argument(
-        "-o",
-        "--open",
-        help="directly opens board",
-        metavar="BOARD",
-        action="store",
-        default=None,
-    )
-    parser.add_argument(
-        "board", help="directly opens board", nargs="?", action="store", default=None
     )
 
     args = parser.parse_args()
@@ -1548,27 +1571,15 @@ def main():
         % (sys.version_info[0], sys.version_info[1], serial.VERSION)
     )
 
-    mpfs = ESPShell(not args.nocolor, not args.nocache, args.reset)
-
-    if args.open is not None:
-        debug("args.open is not None")
-        if args.board is None:
-            if not mpfs.do_open(args.open):
-                return
-        else:
-            print(
-                "Positional argument ({}) takes precedence over --open.".format(
-                    args.board
-                )
-            )
-
-    if args.board:
-        debug(f"{args.board=}")
-        mpfs.do_open(args.board)
-    else:
-        debug("No args.board given. Trying to automatically connect over serial port")
-        # Try to find a suitable port and open it
+    if not args.port:
         port, _description = esp32common.get_active_comport()
+        print(f"Detected {port=}")
+    else:
+        port = args.port
+
+    mpfs = ESPShell(not args.nocolor, not args.nocache, args.reset, args.noautoconnect)
+
+    if not args.noautoconnect:
         print(f"Automatic trying to use {port=}")
         mpfs.do_open(port)
 
