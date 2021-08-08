@@ -1,6 +1,3 @@
-## @file webrepl.py
-#
-
 """
 micropython webrepl related functions.
 ======================================
@@ -28,8 +25,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 
 # local imports
-from lib.helper import dumpArgs, debug
+from lib.helper import debug
 
+# Global variables
 global browser
 
 
@@ -314,7 +312,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ip",
         help="esp32 wlan ipaddress",
-        default="192.168.178.149"
+        default=""
     )
 
     parser.add_argument(

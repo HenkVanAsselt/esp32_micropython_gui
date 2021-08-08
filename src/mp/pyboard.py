@@ -8,7 +8,7 @@ Also see: D:\\hva\\projects\\micropython\\installers\\Thonny\\thonny-3.3.6 sourc
 import sys
 import time
 
-from lib.helper import debug, dumpFuncname
+from lib.helper import debug, dumpFuncname, dumpArgs, debug_indent, debug_unindent
 
 try:
     stdout = sys.stdout.buffer
@@ -52,7 +52,7 @@ class Pyboard:
         if self.con is not None:
             self.con.close()
 
-    # @dumpArgs
+    @dumpArgs
     def read_until(
             self,
             min_num_bytes: int,
@@ -68,32 +68,54 @@ class Pyboard:
         :param data_consumer: callback function
         """
 
-        data = self.con.read(min_num_bytes)
-        # debug(f'read {data=}')
-        if data_consumer:
-            data_consumer(data)
+        data = b''
+
+        # If a miniumum number of bytes is given, wait till at least
+        # that number of bytes are received. If the value is 0, then
+        # continue, and rely on the terminator and timeout values.
+        if min_num_bytes:
+            data = self.con.read(min_num_bytes)
+            # debug(f'read {data=}')
+            if data_consumer:
+                data_consumer(data)
+
         timeout_count = 0
         while True:
-            if data.endswith(ending):
+            if ending and data.endswith(ending):
                 break
+            else:
+                # debug(f"{ending=} was not found")
+                pass
+
             if self.con.inWaiting() > 0:
                 new_data = self.con.read(1)
                 # debug(f'read {new_data=}')
                 data = data + new_data
+                # if len(data) > 80:
+                #     debug(f'data: len={len(data)} {data[-80:]=}')
+                # else:
+                #     debug(f'data: len={len(data)} {data=}')
                 if data_consumer:
                     data_consumer(new_data)
-                timeout_count = 0
+                # timeout_count = 0
             else:
                 timeout_count += 1
+                # debug(f'{timeout_count=}')
                 if timeout is not None and timeout_count >= 100 * timeout:
+                    if not data:
+                        debug(f"TIMEOUT - No data received within {timeout} seconds")
+                    else:
+                        debug(f"TIMEOUT - data {data} did not end with {ending}")
                     break
                 time.sleep(0.01)
-        debug(f'read_until returns "{data}"')
+        debug(f"read_until returns {data=}")
         return data
 
     @dumpFuncname
     def enter_raw_repl(self):
         """Pyboard enter raw repl."""
+
+        debug_indent("enter_raw_repl")
 
         time.sleep(0.5)  # allow some time for board to reset
         debug(r'self.con.write "\r\x03\x03"  (Ctrl-C twice)')
@@ -112,6 +134,7 @@ class Pyboard:
 
             if not data.endswith(b"raw REPL; CTRL-B to exit\r\n>"):
                 print(data)
+                debug_unindent()
                 raise PyboardError("could not enter raw repl 1")
 
             debug(r'self.con.write "\x04"  (soft reset)')
@@ -119,6 +142,7 @@ class Pyboard:
             data = self.read_until(1, b"soft reboot\r\n", timeout=10)
             if not data.endswith(b"soft reboot\r\n"):
                 print(data)
+                debug_unindent()
                 raise PyboardError("could not enter raw repl 2")
 
             # By splitting this into 2 reads, it allows boot.py to print stuff,
@@ -126,17 +150,20 @@ class Pyboard:
             data = self.read_until(1, b"raw REPL; CTRL-B to exit\r\n", timeout=10)
             if not data.endswith(b"raw REPL; CTRL-B to exit\r\n"):
                 print(data)
+                debug_unindent()
                 raise PyboardError("could not enter raw repl 3")
 
         else:
 
             debug(r'self.con.write "\r\x01"  (enter raw REPL)')
             self.con.write(b"\r\x01")  # ctrl-A: enter raw REPL
-            data = self.read_until(1, b"raw REPL; CTRL-B to exit\r\n", timeout=10)
+            data = self.read_until(0, b"raw REPL; CTRL-B to exit\r\n", timeout=10)
 
             if not data.endswith(b"raw REPL; CTRL-B to exit\r\n"):
                 print(data)
+                debug_unindent()
                 raise PyboardError("could not enter raw repl 4")
+        debug_unindent()
 
     @dumpFuncname
     def exit_raw_repl(self):

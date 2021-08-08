@@ -35,34 +35,37 @@ import tempfile
 import pathlib
 import functools
 import time
+import textwrap
 
 # 3rd party imports
 import cmd2  # type: ignore
-from cmd2 import fg
+from cmd2 import style, fg
 from cmd2 import with_argparser
 import colorama
 import serial
-from PyQt5.Qt import QEventLoop, QTimer
 import keyboard
 
 # Local imports
 import param
-from mp import version
+
+# from mp import version
 from mp.conbase import ConError
 from mp.mpfexp import MpFileExplorer
 from mp.mpfexp import MpFileExplorerCaching
 from mp.mpfexp import RemoteIOError
 from mp.pyboard import PyboardError
+
 # from mp.tokenizer import Tokenizer
 import esp32common
-from lib.helper import debug, dumpFuncname, dumpArgs
+from lib.helper import debug, dumpFuncname, dumpArgs, debug_indent, debug_unindent
 import webrepl
+import esp32flash
 
 
 # -----------------------------------------------------------------------------
 def must_be_connected(method):
-    """A decorator which tests if we are actally connected to a device.
-    """
+    """A decorator which tests if we are actally connected to a device."""
+
     @functools.wraps(method)
     def _impl(self, *method_args, **method_kwargs):
         if self.fe:
@@ -76,77 +79,58 @@ def must_be_connected(method):
 
 
 # -----------------------------------------------------------------------------
-def erase_flash(comport="COM5") -> bool:
-    """Erase flash memory of the connected ESP32.
+def available_binfiles(folder) -> list:
+    """Get a list of available micropython bin files.
 
-    :param comport: The name of the comport to use
-    :returns: True on success, False in case of an error
+    :param folder: Folder to look into
+    :returns: List with avaialble bin files
     """
 
-    # Check if we can find the esptool executable
-    esptool = pathlib.Path("../bin/esptool.exe")
-    if not esptool.is_file():
-        print(f"Error: Could not find {str(esptool)}")
-        return False
+    if not folder.is_dir():
+        print(f"Error: Could not find folder {folder}")
+        return []
 
-    print(f"Trying to erase flash over {comport=}")
-    cmdstr = f'"{esptool}" --chip esp32 --port {comport}: erase_flash'
-    print(f"Running {cmdstr}")
-    if param.is_gui:
-        try:
-            param.worker.run_command(cmdstr)
-            while param.worker.active:
-                # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
-                loop = QEventLoop()
-                QTimer.singleShot(250, loop.quit)
-                loop.exec_()
-        except Exception as err:
-            print(err)
-            return False
-
-    # else:
-    ret = esp32common.local_run(cmdstr)
-    return ret
+    available_files = folder.glob("*.bin")
+    return list(available_files)
 
 
-# -----------------------------------------------------------------------------
-def write_flash_with_binfile(comport="COM5", binfile=None) -> bool:
-    """Write flash of connected device with given binfile.
-
-    :param comport: port to use
-    :param binfile: file to write
-    :returns: True on success, False in case of an error
-    """
-
-    # Check if we can find the esptool executable
-    esptool = pathlib.Path("../bin/esptool.exe")
-    if not esptool.is_file():
-        print(f"Error: Could not find {str(esptool)}")
-        return False
-
-    print(f"Trying to write flash with {binfile}")
-    cmdstr = f'"{esptool}" --chip esp32 --port {comport}: --baud 460800 write_flash -z 0x1000 "{binfile}"'
-    debug(f"{cmdstr=}")
-
-    if param.is_gui:
-        param.worker.run_command(cmdstr)
-        while param.worker.active:
-            # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
-            loop = QEventLoop()
-            QTimer.singleShot(250, loop.quit)
-            loop.exec_()
-        return True
-
-    # If we are here, then this was not the gui version, and have to run
-    # this external command in a different way
-    ret = esp32common.local_run(cmdstr)
-    return ret
+# # -----------------------------------------------------------------------------
+# def write_flash_with_binfile(comport="COM5", binfile=None) -> bool:
+#     """Write flash of connected device with given binfile.
+#
+#     :param comport: port to use
+#     :param binfile: file to write
+#     :returns: True on success, False in case of an error
+#     """
+#
+#     # Check if we can find the esptool executable
+#     esptool = pathlib.Path("../bin/esptool.exe")
+#     if not esptool.is_file():
+#         print(f"Error: Could not find {str(esptool)}")
+#         return False
+#
+#     print(f"Trying to write flash with {binfile}")
+#     cmdstr = f'"{esptool}" --chip esp32 --port {comport}: --baud 460800 write_flash -z 0x1000 "{binfile}"'
+#     debug(f"{cmdstr=}")
+#
+#     if param.is_gui:
+#         param.worker.run_command(cmdstr)
+#         while param.worker.active:
+#             # The following 3 lines will do the same as time.sleep(1), but more PyQt5 friendly.
+#             loop = QEventLoop()
+#             QTimer.singleShot(250, loop.quit)
+#             loop.exec_()
+#         return True
+#
+#     # If we are here, then this was not the gui version, and have to run
+#     # this external command in a different way
+#     ret = esp32common.local_run(cmdstr)
+#     return ret
 
 
 # =============================================================================
 class ESPShell(cmd2.Cmd):
-    """ESP32 Shell class.
-    """
+    """ESP32 Shell class."""
 
     # Define the help categories
     CMD_CAT_CONNECTING = "Connections"
@@ -158,7 +142,9 @@ class ESPShell(cmd2.Cmd):
     CMD_CAT_RUN = "Execution commands"
     CMD_CAT_REPL = "REPL related functions"
 
-    def __init__(self, color=False, caching=False, reset=False, autoconnect=True, port=""):
+    def __init__(
+        self, color=False, caching=False, reset=False, autoconnect=True, port=""
+    ):
         """Initialialize class ESPShell instance."""
 
         startup_script = os.path.join(os.path.dirname(__file__), ".esp32clirc")
@@ -207,7 +193,7 @@ class ESPShell(cmd2.Cmd):
         self.default_category = "cmd2 Built-in Commands"
 
         # Color to output text in with echo command
-        self.foreground_color = "cyan"
+        self.foreground_color = "yellow"
 
         # Make echo_fg settable at runtime
         self.add_settable(
@@ -215,13 +201,15 @@ class ESPShell(cmd2.Cmd):
                 "foreground_color",
                 str,
                 "Foreground color to use with echo command",
+                self,
                 choices=fg.colors(),
             )
         )
 
         if self.port and autoconnect:
             debug(f"Automatic trying to use {port=}")
-            self.__connect(f"ser:{self.port}")
+            ret = self.__connect(f"ser:{self.port}")
+            print(f"{ret=}")
 
     # -------------------------------------------------------------------------
     def __del__(self):
@@ -235,26 +223,26 @@ class ESPShell(cmd2.Cmd):
         if self.color:
             self.intro = (
                 "\n"
-                + colorama.Fore.GREEN
-                + "** Micropython File Shell v%s, sw@kaltpost.de ** " % version.FULL
+                # + colorama.Fore.GREEN
+                # + "** Micropython File Shell v%s, sw@kaltpost.de ** " % version.FULL
                 + colorama.Fore.RESET
                 + "\n"
             )
         else:
             self.intro = (
-                "\n** Micropython File Shell v%s, sw@kaltpost.de **\n" % version.FULL
+                # "\n** Micropython File Shell v%s, sw@kaltpost.de **\n" % version.FULL
+                ""
             )
 
-        self.intro += "-- Running on Python %d.%d using PySerial %s --\n" % (
-            sys.version_info[0],
-            sys.version_info[1],
-            serial.VERSION,
-        )
+        # self.intro += "-- Running on Python %d.%d using PySerial %s --\n" % (
+        #     sys.version_info[0],
+        #     sys.version_info[1],
+        #     serial.VERSION,
+        # )
 
     # -------------------------------------------------------------------------
     def __set_prompt_path(self):
-        """Set the shell prompt.
-        """
+        """Set the shell prompt."""
 
         if self.fe:
             pwd = self.fe.pwd()
@@ -277,6 +265,7 @@ class ESPShell(cmd2.Cmd):
             self.prompt = "cli32 [" + pwd + "]> "
 
     # -------------------------------------------------------------------------
+    @dumpArgs
     def __error(self, msg):
         """Show the error message."""
 
@@ -293,6 +282,7 @@ class ESPShell(cmd2.Cmd):
         :param port: port to use
         :returns: True on success, False on error
         """
+
         print(f"Connecting with MpFileExplorer to device over {port=}")
         # self.port = port  # Save the portname
         try:
@@ -321,8 +311,7 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @dumpFuncname
     def __disconnect(self) -> None:
-        """Close current fe (file-exeplorer) connection.
-        """
+        """Close current fe (file-exeplorer) connection."""
 
         debug("Terminating MpFileExplorer")
         if self.fe:
@@ -347,6 +336,7 @@ class ESPShell(cmd2.Cmd):
         return True
 
     # -------------------------------------------------------------------------
+    @dumpArgs
     def remote_exec(self, command: str) -> bytes:
         """Execute a single Python statement on the remote device.
 
@@ -363,24 +353,22 @@ class ESPShell(cmd2.Cmd):
 
         def data_consumer(_data: bytes) -> None:
             """Handle the incoming data.
+            By default, just print it.
 
-            By default, it just prints it.
-            :param _data: Data to process
+            :param _data: data to process
+            :returns: nothing
             """
+
             # debug(f"data_consumer({data=})")
             # data = str(data.decode("utf-8"))
             # sys.stdout.write(data.strip("\x04"))
             pass
 
-        debug(f"{command=}")
-
         try:
             self.fe.exec_raw_no_follow(command + "\n")
             ret = self.fe.follow(None, data_consumer)
-            # debug(f"in exec, {ret=}")
             if len(ret[-1]):
                 self.__error(ret[-1].decode("utf-8"))
-            # else
             return ret[0].strip()
 
         except IOError as e:
@@ -408,11 +396,20 @@ class ESPShell(cmd2.Cmd):
 
     # -------------------------------------------------------------------------
     def softreset(self) -> None:
-        """Soft reset the device, should be equivalent with CTRL+D in repl.
-        """
-        print("performing a soft reset")
+        """Soft reset the device, should be equivalent with CTRL+D in repl."""
+        print("performing a soft reset (soft reboot)")
         self.remote_exec("import machine")
         self.remote_exec("machine.soft_reset()")
+
+    # Create an alias
+    softreboot = softreset
+
+    # -------------------------------------------------------------------------
+    def do_version(self, _args) -> None:
+        """Print the micropython version, running on the connected device."""
+        ret = self.remote_exec("print(uos.uname().release)")
+        version = ret.decode("utf-8")
+        print(f"Micropython version {version}")
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_CONNECTING)
@@ -430,7 +427,7 @@ class ESPShell(cmd2.Cmd):
 
         TARGET might be:
 
-        - a serial port, e.g.       ttyUSB0, ser:/dev/ttyUSB0
+        - a serial port, e.g.       ttyUSB0, ser:/dev/ttyUSB0, COM5:
         - a telnet host, e.g        tn:192.168.1.1 or tn:192.168.1.1,login,passwd
         - a websocket host, e.g.    ws:192.168.1.1 or ws:192.168.1.1,passwd
         """
@@ -462,7 +459,8 @@ class ESPShell(cmd2.Cmd):
             portstr = args
 
         ret = self.__connect(portstr)
-        debug(f"{ret=}")
+        if ret:
+            debug("Connected")
 
     do_connect = do_open  # Create an alias
 
@@ -472,6 +470,8 @@ class ESPShell(cmd2.Cmd):
         """Close connection to device."""
         self.__disconnect()
         print("File Explorer connection has been closed.")
+
+    do_disconnect = do_close  # Create an alias
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
@@ -676,8 +676,7 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_lpwd(self, _args):
-        """Print current local source directory.
-        """
+        """Print current local source directory."""
 
         sourcefolder = esp32common.get_sourcefolder()
         print(sourcefolder)
@@ -885,22 +884,42 @@ class ESPShell(cmd2.Cmd):
         Will delete all files and folders on the device.
         """
 
-        print("cleanfs is not implemented yet.")
-        pass
+        directory = "/"
 
-        # print('Cleaning the filesystem')
-        # for name in files.ls(long_format=False):
-        #     if force or name not in exclude_files:
-        #         try:
-        #             print(f"removing file {name}")
-        #             files.rm(name)
-        #         except (RuntimeError, PyboardError):
-        #             try:
-        #                 print(f"removing folder {name}")
-        #                 files.rmdir(name)
-        #             except (RuntimeError, PyboardError):
-        #                 print('Unknown Error removing file {}'.format(name),
-        #                       file=sys.stderr)
+        # Build a script to walk an entire directory structure and delete every
+        # file and subfolder.  This is tricky because MicroPython has no os.walk
+        # or similar function to walk folders, so this code does it manually
+        # with recursion and changing directories.  For each directory it lists
+        # the files and deletes everything it can, i.e. all the files.  Then
+        # it lists the files again and assumes they are directories (since they
+        # couldn't be deleted in the first pass) and recursively clears those
+        # subdirectories.  Finally when finished clearing all the children the
+        # parent directory is deleted.
+
+        command = """
+             try:
+                 import os
+             except ImportError:
+                 import uos as os
+             def rmdir(directory):
+                 os.chdir(directory)
+                 for f in os.listdir():
+                     try:
+                         os.remove(f)
+                     except OSError:
+                         pass
+                 for f in os.listdir():
+                     rmdir(f)
+                 os.chdir('..')
+                 os.rmdir(directory)
+             rmdir('{0}')
+         """.format(
+            directory
+        )
+
+        command = textwrap.dedent(command)
+        ret = self.remote_exec(command)
+        debug(f"cleanfs {ret=}")
 
     # -------------------------------------------------------------------------
     cat_parser = argparse.ArgumentParser()
@@ -956,8 +975,7 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_RUN)
     def do_execfile(self, statement):
-        """Execute a local python file on the remote device.
-        """
+        """Execute a local python file on the remote device."""
 
         sourcefile = statement.args
 
@@ -998,26 +1016,30 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     repl_parser = argparse.ArgumentParser()
     repl_parser.add_argument(
-        "-r", "--reboot", action='store_true', help="Soft-reboot the device after the REPL connection is made."
+        "-r",
+        "--reboot",
+        action="store_true",
+        help="Soft-reboot the device after the REPL connection is made.",
     )
     repl_parser.add_argument(
-        "-c", "--ctrlc", action='store_true', help="First soft reboot, and then interrupt the boot process."
+        "-c",
+        "--ctrlc",
+        action="store_true",
+        help="First soft reboot, and then interrupt the boot process.",
     )
 
     @with_argparser(repl_parser)
     @must_be_connected
     @cmd2.with_category(CMD_CAT_REPL)
     def do_repl(self, statement):
-        """Enter Micropython REPL over serial connection.
-        """
+        """Enter Micropython REPL over serial connection."""
 
         debug(f"{statement=}")
         self.start_repl(with_softreboot=statement.reboot, with_ctrlc=statement.ctrlc)
 
     # -------------------------------------------------------------------------
     def start_repl(self, with_softreboot=False, with_ctrlc=False) -> None:
-        """Start the repl connection.
-        """
+        """Start the repl connection."""
 
         debug("=====")
         debug("start_repl()")
@@ -1060,18 +1082,18 @@ class ESPShell(cmd2.Cmd):
         # If required, perform a soft reboot of the connected device by sending CTRL+D
         if with_softreboot:
             # keyboard.write('\x04')
-            keyboard.press_and_release('ctrl+d')
+            keyboard.press_and_release("ctrl+d")
             time.sleep(0.1)
-            keyboard.press_and_release('ctrl+d')
+            keyboard.press_and_release("ctrl+d")
             time.sleep(0.1)
 
         # If required, interrupt the running program with CTRL+C
         if with_ctrlc:
-            keyboard.press_and_release('ctrl+d')    # First soft reboot
+            keyboard.press_and_release("ctrl+d")  # First soft reboot
             time.sleep(0.1)
-            keyboard.press_and_release('ctrl+c')    # Then interrupt the boot process
+            keyboard.press_and_release("ctrl+c")  # Then interrupt the boot process
             time.sleep(0.1)
-            keyboard.press_and_release('ctrl+c')    # Twice
+            keyboard.press_and_release("ctrl+c")  # Twice
             time.sleep(0.1)
 
         try:
@@ -1079,7 +1101,6 @@ class ESPShell(cmd2.Cmd):
             self.repl_connection.join(True)
         except Exception as err:
             debug(f"Exception: {err}")
-            pass
 
         debug("-----")
         debug("Calling repl.console.cleanup()")
@@ -1172,7 +1193,9 @@ class ESPShell(cmd2.Cmd):
             debug(f"1 {rfile_name=}")
         else:
             rfile_name = (
-                sourcefile[: str(sourcefile).rfind(".")] if "." in sourcefile else sourcefile
+                sourcefile[: str(sourcefile).rfind(".")]
+                if "." in sourcefile
+                else sourcefile
             ) + ".mpy"
             debug(f"1 {rfile_name=}")
 
@@ -1231,7 +1254,7 @@ class ESPShell(cmd2.Cmd):
             # editor = pathlib.Path(r"C:\Users\HenkA\AppData\Local\Programs\Microsoft VS Code\Code.exe")
             editor = param.config["editor"]["exe"]
             cmdstr = f'"{editor}" "{local_filename}"'
-            esp32common.local_run(cmdstr)
+            esp32common.run_program(cmdstr)
 
             # What is the new state?
             newstat = os.stat(local_filename)
@@ -1274,7 +1297,7 @@ class ESPShell(cmd2.Cmd):
         # )
         editor = param.config["editor"]["exe"]
         cmdstr = f'"{editor}" "{sourcefile}"'
-        esp32common.local_run(cmdstr)
+        esp32common.run_program(cmdstr)
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_DEBUG)
@@ -1283,7 +1306,8 @@ class ESPShell(cmd2.Cmd):
 
         Can be used for debugging purposes
         """
-        print(statement)
+        # print(statement)
+        self.poutput(style(statement, fg=self.foreground_color))
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_DEBUG)
@@ -1299,7 +1323,10 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     sync_parser = argparse.ArgumentParser()
     sync_parser.add_argument(
-        "-s", "--start", action='store_true', help="Start REPL and softreboot the device after all files are synced."
+        "-s",
+        "--start",
+        action="store_true",
+        help="Start REPL and softreboot the device after all files are synced.",
     )
 
     @with_argparser(sync_parser)
@@ -1318,6 +1345,7 @@ class ESPShell(cmd2.Cmd):
         """
 
         debug(f"do_sync {statement=}")
+        debug_indent("sync progress")
 
         sourcefolder = esp32common.get_sourcefolder()
 
@@ -1337,6 +1365,7 @@ class ESPShell(cmd2.Cmd):
             else:
                 print(f"cannot sync subolder {filename} (yet)")
         print("\nSync completed")
+        debug_unindent()
 
         if statement.start:
             print("Restarting device.")
@@ -1353,10 +1382,19 @@ class ESPShell(cmd2.Cmd):
     flash_parser = argparse.ArgumentParser()
 
     flash_parser.add_argument(
-        "binfile",
-        nargs="?",
+        "-f",
+        "--binfile",
+        # "binfile",
         default="",
         help="Micropython binfile to flash on the device",
+    )
+
+    flash_parser.add_argument(
+        "-n",
+        "--filenumber",
+        # "filenumber",
+        default="",
+        help="Filenumber of the Micropython binfile to flash on the device",
     )
 
     @with_argparser(flash_parser)
@@ -1368,38 +1406,57 @@ class ESPShell(cmd2.Cmd):
         If no file is given, a list of avaialble binfiles in the binfile folder will be shown.
         """
 
+        debug(f"{statement=}")
+
         # Check if we can find the esptool executable
         esptool = pathlib.Path("../bin/esptool.exe").resolve()
         if not esptool.is_file():
-            print(f"Error: Could not find {str(esptool)}")
+            print(f"Error1: Could not find {str(esptool)}")
             return
 
         # Try if this is a full path
-        binfile = pathlib.Path(statement.binfile)
-        if not binfile.is_file():
-            print(f"Error1: Could not find {str(binfile)}")
-            # Try to find the binfile in the binfile path
-            folder = pathlib.Path(param.config["src"]["binpath"])
-            binfile = folder.joinpath(statement.binfile)
+        binfile = None
+        if statement.binfile:
+            binfile = pathlib.Path(statement.binfile)
             if not binfile.is_file():
                 print(f"Error2: Could not find {str(binfile)}")
-                available_files = folder.glob("*.bin")
-                print("Available files are:")
-                for available_file in available_files:
-                    print(f" * {available_file}")
                 return
-            print(f"Using {str(binfile)}")
+
+        # Try to find the binfile in the binfile path
+        folder = pathlib.Path(param.config["src"]["binpath"])
+        available_files = available_binfiles(folder)
+        for n, available_file in enumerate(available_files):
+            print(f" {n} = {available_file}")
+
+        if statement.filenumber:
+            filenumber = int(statement.filenumber)
+            print(f"{filenumber=}")
+            if filenumber in range(len(available_files)):
+                filename = available_files[filenumber]
+                print(f"{filename=}")
+                binfile = pathlib.Path(filename)
+            else:
+                print(f"Invalid {filenumber=} has been given")
+                return
+
+        if not binfile:
+            print(f"No binfile determined")
+            return
+
+        if not binfile.is_file():
+            print(f"Could not find {str(binfile)}")
+            return
 
         # Step 1 of 4: Close the current com port
         self.__disconnect()
 
         # Step 2 of 4: Erase the flash
-        ret = erase_flash(self.port)
+        ret = esp32flash.erase_flash(self.port)
         if not ret:
             return
 
         # # Step 3 of 4: Program the binfile
-        ret = write_flash_with_binfile(self.port, binfile)
+        ret = esp32flash.write_flash_with_binfile(self.port, binfile)
         if not ret:
             return
 
@@ -1410,26 +1467,25 @@ class ESPShell(cmd2.Cmd):
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_FILES)
     def do_eraseflash(self, _statement) -> None:
-        """Erase the flash memory of the connected device. This will also remove MicroPython itself !!!
-        """
+        """Erase the flash memory of the connected device. This will also remove MicroPython itself !!!"""
 
         # Step 1 of 3: Close the current com port
         self.__disconnect()
         # Step 2 of 3: Erase the flash memory
-        erase_flash(comport=self.port)
+        esp32flash.erase_flash(comport=self.port)
         # Step 3 of 3: Open the com port again
+        # Note: This should fail, as after eraseflash, no microropython is available on the device anymore
         print(f"--- Connecting again to {self.port=}")
         self.do_open(self.port)
 
     # -------------------------------------------------------------------------
     @cmd2.with_category(CMD_CAT_REPL)
     def do_putty(self, _statement) -> None:
-        """Start putty to connect to the device in REPL mode.
-        """
+        """Start putty to connect to the device in REPL mode."""
 
         import time
 
-        self.__disconnect()     # To free the COM port
+        self.__disconnect()  # To free the COM port
         time.sleep(0.2)
 
         esp32common.putty(self.port)
@@ -1447,6 +1503,12 @@ class ESPShell(cmd2.Cmd):
 
             '192.168.178.149'   (which will use the default port 8266)
             '192.168.178.149:1111' (which will use portnumber 1111)
+
+        The second argument should be the password to use.
+
+        E.g.
+
+            webrepl 192.168.192.169 henkiepenkie
         """
 
         if statement.arg_list:
@@ -1459,7 +1521,9 @@ class ESPShell(cmd2.Cmd):
             # webrepl.start_webrepl_html(ip)    # Open webrepl link over network/wifi
             url = webrepl.ip_to_url(ip)
             debug(f"{url=}")
-            webrepl.start_webrepl_with_selenium(url, password=password)    # Open webrepl link over network/wifi
+            webrepl.start_webrepl_with_selenium(
+                url, password=password
+            )  # Open webrepl link over network/wifi
         else:
             print("No IP address for webrepl connection was given")
             return
@@ -1468,8 +1532,7 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_WLAN)
     def do_getip(self, _statement) -> None:
-        """Get IP address of the connected device.
-        """
+        """Get IP address of the connected device."""
 
         ip = self.get_ip()
         print(f"WLAN IP address: {ip}")
@@ -1478,18 +1541,19 @@ class ESPShell(cmd2.Cmd):
     @must_be_connected
     @cmd2.with_category(CMD_CAT_REBOOT)
     def do_softreset(self, _statement) -> None:
-        """Soft reset the device, should be equivalent with CTRL+D in repl.
-        """
+        """Soft reset the device, should be equivalent with CTRL+D in repl."""
 
         self.softreset()
         # No __disconnect is neccessary here.
+
+    # Create an alias
+    do_softreboot = do_softreset
 
     # -------------------------------------------------------------------------
     @must_be_connected
     @cmd2.with_category(CMD_CAT_REBOOT)
     def do_hardreset(self, _statement) -> None:
-        """Hard reset the device, equivalent with pressing the external RESET button.
-        """
+        """Hard reset the device, equivalent with pressing the external RESET button."""
 
         self.remote_exec("import machine")
         self.remote_exec("machine.reset()")
@@ -1498,8 +1562,7 @@ class ESPShell(cmd2.Cmd):
 
 # =============================================================================
 def main():
-    """main function of this module.
-    """
+    """main function of this module."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1536,7 +1599,10 @@ def main():
     )
 
     parser.add_argument(
-        "--noautoconnect", help="Do not autoconnect to any COM port", action="store_true", default=False
+        "--noautoconnect",
+        help="Do not autoconnect to any COM port",
+        action="store_true",
+        default=False,
     )
 
     parser.add_argument("--logfile", help="write log to file", default=None)
@@ -1573,15 +1639,19 @@ def main():
 
     if not args.port:
         port, _description = esp32common.get_active_comport()
-        print(f"Detected {port=}")
+        if port:
+            print(f"Detected {port=}")
+        else:
+            print("No active port detected")
     else:
         port = args.port
 
     mpfs = ESPShell(not args.nocolor, not args.nocache, args.reset, args.noautoconnect)
 
-    if not args.noautoconnect:
-        print(f"Automatic trying to use {port=}")
-        mpfs.do_open(port)
+    if port:
+        if not args.noautoconnect:
+            print(f"Automatic trying to use {port=}")
+            mpfs.do_open(port)
 
     if args.command is not None:
         debug("Script commands are given")

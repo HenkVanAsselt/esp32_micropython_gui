@@ -6,9 +6,14 @@ import sys
 import subprocess
 import pathlib
 import configparser
+import os
+import platform
+import shlex
+import time
 
 # 3rd party imports
 import serial.tools.list_ports  # type: ignore
+import keyboard
 
 # Local imports
 import param
@@ -127,13 +132,15 @@ def get_sourcefolder() -> pathlib.Path:
 
 # -----------------------------------------------------------------------------
 @dumpArgs
-def local_run(cmdstr) -> bool:
-    """Run a local command, for example to start the editor.
+def run_program(cmdstr) -> bool:
+    """Run a local application, for example an editor.
 
-    This function will only run the command, it does not return stdout and/or stderr
+    This function will only run the application, it does not return stdout and/or stderr
 
-    :param cmdstr: The command to execute.
-    :returns: True in case of a normal termination of the command, False in case of an error.
+    In case you want to run a text based application, use execute_command() instead.
+
+    :param cmdstr: The application to run.
+    :returns: True in case of a normal termination of the application, False in case of an error.
     """
 
     try:
@@ -151,28 +158,69 @@ def local_run(cmdstr) -> bool:
 
 # -----------------------------------------------------------------------------
 @dumpArgs
-def local_exec(command_list) -> tuple:
-    """"Run a local command, for example to start the editor.
+def execute_command(command) -> tuple:
+    """"Run a text based command on this PC.
 
-    This function will also return the stdout and stderr results.
+    This function will not only show the stdout and stderr realtime (thus not
+    waiting till the command is completely finished, but will also return the
+    stdout and stderr output to the calling function.
 
-    :param command_list: List of commands
+    In case of a non-text based application, use run_program() instead.
+
+    :param command: Command string or list of commands
     :returns: tuple of stdout and stderr results
 
     """
 
-    proc = subprocess.Popen(
-        command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = proc.communicate()
-    debug(f"{out=}")
-    debug(f"{err=}")
-    if out:
-        print(out.decode())
-    if err:
-        print(err.decode())
+    # The commands can be given as a string or a list of strings.
+    # In case it is not a list, split the line in substrings.
+    command_list: list = []
+    if isinstance(command, str):
+        command_list = shlex.split(command)
+    elif isinstance(command, list):
+        command_list = command
 
-    return out, err
+    # Based on
+    # https://stackoverflow.com/questions/22636420/python-subprocess-command-to-run-silent-prevent-cmd-from-appearing
+    # Try to 'hide' the CMD window when ADB starts
+    startupinfo = None
+    if platform.system() == "Windows" or os.name == 'nt':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+    # Execute the command, and print and capture the output
+    with subprocess.Popen(
+        command_list, startupinfo=startupinfo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False
+    ) as proc:
+
+        total_std_output: bytes = b""
+        total_err_output: bytes = b""
+
+        while True:
+
+            err_output = b''
+            std_output = proc.stdout.read(1)
+
+            if not std_output:
+                err_output = proc.stderr.read(1)
+
+            if not std_output and not err_output and proc.poll() is not None:
+                break
+
+            if std_output:
+                # Print the output, but also append it to the total output bytestring
+                print(std_output.decode(), end="", flush=True)
+                total_std_output += std_output
+
+            if err_output:
+                # Print the error, but also append it to the total error bytestring
+                print(err_output.decode(), end="", flush=True)
+                total_err_output += err_output
+
+        proc.poll()
+
+    # Return the tuple of stdout and errout results.
+    return total_std_output, total_err_output
 
 
 # -----------------------------------------------------------------------------
@@ -183,24 +231,22 @@ def putty(port) -> tuple:
     :returns: tuple of stdout and stderr text
     """
 
-    import time
-    import keyboard
-
     command_list = ["putty", "-serial", port, "-sercfg", "115200,8,n,1,N"]
     debug(f"Calling {' '.join(command_list)}")
 
-    proc = subprocess.Popen(
+    with subprocess.Popen(
         command_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    ) as proc:
 
-    # Wait some time, and then send Ctrl+b to exit raw repl (just to be sure).
-    # We then should see the prompt:
-    # MicroPython v1.14 on 2021-02-02; ESP32 module with ESP32
-    # Type "help()" for more information.
-    time.sleep(0.2)
-    keyboard.press_and_release('ctrl+b')
+        # Wait some time, and then send Ctrl+b to exit raw repl (just to be sure).
+        # We then should see the prompt:
+        # MicroPython v1.14 on 2021-02-02; ESP32 module with ESP32
+        # Type "help()" for more information.
+        time.sleep(0.2)
+        keyboard.press_and_release('ctrl+b')
 
-    out, err = proc.communicate(input=b"\r\n")
+        out, err = proc.communicate(input=b"\r\n")
+
     return out.decode(), err.decode()
 
 

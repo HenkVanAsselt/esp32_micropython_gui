@@ -1,3 +1,5 @@
+"""mpfexp = micropython file explorer"""
+
 ##
 # The MIT License (MIT)
 #
@@ -28,7 +30,6 @@ import logging
 import os
 import posixpath  # force posix-style slashes
 import pathlib
-import re
 import subprocess
 import fnmatch
 
@@ -40,7 +41,7 @@ from mp.pyboard import Pyboard
 from mp.pyboard import PyboardError
 from mp.retry import retry
 
-from lib.helper import debug, dumpFuncname, dumpArgs
+from lib.helper import debug, dumpFuncname, dumpArgs, debug_indent, debug_unindent
 
 
 # -------------------------------------------------------------------------
@@ -61,11 +62,14 @@ def _was_file_not_existing(exception):
 
 # =============================================================================
 class RemoteIOError(IOError):
+    """Dummy handler for RemoteIOError"""
+
     pass
 
 
 # =============================================================================
 class MpFileExplorer(Pyboard):
+    """Micropython File Explorer class"""
 
     BIN_CHUNK_SIZE = 64
     MAX_TRIES = 3
@@ -177,13 +181,15 @@ class MpFileExplorer(Pyboard):
 
     # -------------------------------------------------------------------------
     def __set_sysname(self):
-        """Get and set the device system name.
-        """
+        """Get and set the device system name."""
+
+        debug_indent("__set_sysname")
         code_to_run_on_device = "uos.uname()[0]"
         debug(f"in pyboard __set_sysname(), {code_to_run_on_device=}")
         self.sysname = self.eval(code_to_run_on_device).decode("utf-8")
         # self.sysname = self.eval("uos.uname()[0]").decode("utf-8")
         debug(f"{self.sysname=}")
+        debug_unindent()
 
     # -------------------------------------------------------------------------
     @dumpArgs
@@ -210,6 +216,7 @@ class MpFileExplorer(Pyboard):
         * Get and set the current system name
         """
 
+        debug_indent("mpfexp setup()")
         self.enter_raw_repl()
         self.exec_(
             "try:\n    import uos\nexcept ImportError:\n    import os as uos\nimport sys"
@@ -224,6 +231,7 @@ class MpFileExplorer(Pyboard):
         self.dir = posixpath.join("/", self.eval("uos.getcwd()").decode("utf8"))
 
         self.__set_sysname()
+        debug_unindent()
 
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
@@ -364,7 +372,6 @@ class MpFileExplorer(Pyboard):
                 print(" * put %s" % f)
             self.put(f, f.name)
 
-
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
     def get(self, src, dst=None):
@@ -402,12 +409,12 @@ class MpFileExplorer(Pyboard):
     def mget(self, dst_dir, pat, verbose=False):
         """Get multiple files from the device to the given destination folder.
 
-         Makes use of `get`
+        Makes use of `get`
 
-         :param dst_dir: The target folfer
-         :param pat: filename pattern (using fnmatch)
-         :param verbose: If true, display the progress.
-         """
+        :param dst_dir: The target folfer
+        :param pat: filename pattern (using fnmatch)
+        :param verbose: If true, display the progress.
+        """
 
         debug(f"mpfexp.mget {pat=}")
         files = self.ls(add_dirs=False)
@@ -421,7 +428,6 @@ class MpFileExplorer(Pyboard):
             else:
                 # debug(f"{f} is no match")
                 pass
-
 
     # -------------------------------------------------------------------------
     @retry(PyboardError, tries=MAX_TRIES, delay=1, backoff=2, logger=logging.root)
@@ -479,7 +485,7 @@ class MpFileExplorer(Pyboard):
                     break
 
                 self.exec_("f.write(ubinascii.unhexlify('%s'))" % c.decode("utf-8"))
-                data = data[self.BIN_CHUNK_SIZE:]
+                data = data[self.BIN_CHUNK_SIZE :]
 
             self.exec_("f.close()")
 
@@ -556,10 +562,8 @@ class MpFileExplorer(Pyboard):
 
 # =============================================================================
 class MpFileExplorerCaching(MpFileExplorer):
-
     def __init__(self, constr, reset=False):
-        """Initialize MpFileExplorererCaching.
-        """
+        """Initialize MpFileExplorererCaching."""
         MpFileExplorer.__init__(self, constr, reset)
         self.cache = {}
 

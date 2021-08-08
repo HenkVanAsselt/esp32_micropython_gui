@@ -68,6 +68,7 @@ from PyQt5 import QtCore
 
 # =============================================================================
 class Worker(QtCore.QObject):
+    """QT Worker"""
 
     outSignal = QtCore.pyqtSignal(str)
     active = False
@@ -77,6 +78,7 @@ class Worker(QtCore.QObject):
 
     # -------------------------------------------------------------------------
     def run_command(self, cmd, **kwargs):
+        """Execute a command in a thread, calling _execute_command"""
         if self.active:
             return
         self.active = True
@@ -86,6 +88,7 @@ class Worker(QtCore.QObject):
 
     # -------------------------------------------------------------------------
     def _execute_command(self, cmd, **kwargs):
+        """Actually execute the command"""
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs
         )

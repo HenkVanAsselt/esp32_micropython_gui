@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
         self.cmdlineapp = esp32cli.ESPShell(port=self.port)
 
     # -------------------------------------------------------------------------
-    # @dumpArgs
+    @dumpArgs
     def write(self, text):
         """Handle sys.stdout.write: update display.
 
@@ -205,7 +205,7 @@ class MainWindow(QMainWindow):
         :return: Nothing
         """
 
-        debug(f"write({text=}). Calling self.text_update.emit({text=})")
+        # debug(f"write({text=}). Calling self.text_update.emit({text=})")
         self.text_update.emit(
             text
         )  # noqa # Send signal to synchronise call with main thread # noqa
@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
         :return: Nothing
         """
 
-        debug(f"Append text \"{text=}\"")
+        debug(f"append_text(\"{text}\")")
         cur = self.ui.text_output.textCursor()
         cur.movePosition(QtGui.QTextCursor.End)  # Move cursor to end of text
         s = str(text)

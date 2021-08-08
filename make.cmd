@@ -15,6 +15,7 @@ goto _eof
 echo -----------------------------------------------------------------
 echo ESP32 SHELL makefile
 echo -----------------------------------------------------------------
+echo make pip		    Upgrade requirements with pip
 echo make pylint        Run pylint on the whole source folder
 echo make flake8        Run flake 8 on the whole source folder
 echo make vulture       Find dead code
@@ -68,12 +69,14 @@ rem --- Generate DOXYGEN documentation
     goto _eof
 	
 :show_doxygen
-	"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" doc\doxygen\html\index.html
+	rem "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" .\doc\doxygen\html\index.html
+	start ./doc/doxygen/html/index.html
 	goto _eof
 
 :sphinx
     pushd doc & call make html & popd
-    "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" doc\_build\html\index.html
+    rem "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" .\doc\_build\html\index.html
+	start ./doc/_build/html/index.html
     goto _eof
     
 :apidoc

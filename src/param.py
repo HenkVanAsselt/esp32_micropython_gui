@@ -5,8 +5,8 @@ import configparser
 config = configparser.ConfigParser()
 config.read('esp32cli.ini')
 
-is_gui = False      # Meaning, bare CLI is used. Will be set to true in GUI version
-gui_mainwindow = None   # Save it, so it can be used by the commands in the CLI
+is_gui = False          # Meaning, the bare CLI is used. Will have to be set to true in GUI version
+gui_mainwindow = None   # Save it, so it can be used by functions in the GUI.
 worker = None
 
 # ===============================================================================
