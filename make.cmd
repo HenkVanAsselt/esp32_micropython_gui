@@ -29,7 +29,6 @@ echo make apidoc        Generate sphinx api documentation
 echo make doxygen       Make doxygen documentation
 echo.
 echo make installer      make full installation (py2exe and nsis installer)
-echo make doxygen        make doxygen documentation
 echo.
 goto _eof
 
@@ -65,7 +64,9 @@ rem --- convert QT designer UI file to .py file
 
 rem --- Generate DOXYGEN documentation
 :doxygen
-    call doxygen 
+    pushd doc
+    call doxygen
+    popd
     goto _eof
 	
 :show_doxygen
@@ -107,5 +108,22 @@ rem --- Generate DOXYGEN documentation
     pushd src\lib & rmdir /S /Q .pytest_cache & popd
     pushd doc\doxygen & rmdir /S /Q html & popd
     pushd doc & make clean & popd
+	goto _eof
+	
+:get_mpremote
+	pushd src\mpremote
+	del /Q .\*
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/mpremote/mpremote.py
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/mpremote/setup.cfg
+	popd
+    pushd src\mpremote\mpremote
+	del /Q .\*
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/pyboard.py
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/mpremote/mpremote/__init__.py
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/mpremote/mpremote/console.py
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/mpremote/mpremote/main.py
+	wget https://raw.githubusercontent.com/micropython/micropython/master/tools/mpremote/mpremote/pyboardextended.py
+	popd
+	goto _eof
 
 :_eof

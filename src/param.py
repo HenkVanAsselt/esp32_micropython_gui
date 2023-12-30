@@ -9,6 +9,8 @@ is_gui = False          # Meaning, the bare CLI is used. Will have to be set to 
 gui_mainwindow = None   # Save it, so it can be used by functions in the GUI.
 worker = None
 
+port_str = ''           # Port string, like "COM10", "COM4"
+
 # ===============================================================================
 if __name__ == "__main__":
 

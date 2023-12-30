@@ -5,7 +5,7 @@ cmd2
 pyserial
 pylint
 ConfigArgParse
-PySide2
+PySide6
 PyQT5
 PyQt5Designer
 loguru
@@ -13,7 +13,15 @@ selenium
 keyboard
 
 # Micropython specific
+# documentation: https://pypi.org/project/mpy-cross/
 mpy-cross
+# documentation: https://docs.micropython.org/en/latest/reference/pyboard.py.html
+pyboard
+# documenation: https://docs.micropython.org/en/latest/reference/mpremote.html
+mpremote
+# documentation: https://github.com/AmirHmZz/mpbridge
+# Uses mpremote api calls !
+mpbridge
 
 # To create an installer / .exe
 pyinstaller
@@ -27,3 +35,4 @@ Sphinx
 sphinx_rtd_theme
 recommonmark
 docopt
+vulture

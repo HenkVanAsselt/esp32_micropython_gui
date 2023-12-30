@@ -404,7 +404,7 @@ class Demo(QMainWindow):
         x, y, w, h = 500, 200, 300, 400
         self.setGeometry(x, y, w, h)
 
-        connection = REPLConnection('COM4', 115200)
+        connection = REPLConnection('COM6', 115200)
         repl_pane = MicroPythonREPLPane(parent=None)
         self.setCentralWidget(repl_pane)
         repl_pane.connection = connection

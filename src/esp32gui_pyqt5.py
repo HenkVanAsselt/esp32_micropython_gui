@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
         self.port, desc = esp32common.get_active_comport()
         self.config["com"]["port"] = self.port
         self.config["com"]["desc"] = desc
+        param.port_str = self.port
         debug(f"Possible active com port is {self.port}")
 
         # If neccessary, set properties of some elements
@@ -197,7 +198,6 @@ class MainWindow(QMainWindow):
         self.cmdlineapp = esp32cli.ESPShell(port=self.port)
 
     # -------------------------------------------------------------------------
-    @dumpArgs
     def write(self, text):
         """Handle sys.stdout.write: update display.
 
@@ -205,7 +205,7 @@ class MainWindow(QMainWindow):
         :return: Nothing
         """
 
-        # debug(f"write({text=}). Calling self.text_update.emit({text=})")
+        debug(f"write({text=})")
         self.text_update.emit(
             text
         )  # noqa # Send signal to synchronise call with main thread # noqa
@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
         :return: Nothing
         """
 
-        debug(f"append_text(\"{text}\")")
+        # debug(f"append_text(\"{text}\")")
         cur = self.ui.text_output.textCursor()
         cur.movePosition(QtGui.QTextCursor.End)  # Move cursor to end of text
         s = str(text)
@@ -588,8 +588,9 @@ class MainWindow(QMainWindow):
                 loop = QEventLoop()
                 QTimer.singleShot(250, loop.quit)
                 loop.exec_()
-            param.worker.run_command("ping 192.168.178.1")
+            # param.worker.run_command("ping 192.168.178.1")
         else:
+            debug(f"starting cmdlineapp.onecme_plus_hooks({'cmd_str'})")
             self.cmdlineapp.onecmd_plus_hooks(cmd_str)
         # Clear the input window. This also indicates that the
         # command was executed without problem.
